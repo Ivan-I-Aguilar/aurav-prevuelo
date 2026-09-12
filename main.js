@@ -6,7 +6,7 @@ const STATIONS=INSPECTION_STATIONS.map(s=>{
  const scale=Math.max(1,2.25/distance);
  return {...s,stand:[s.point[0]+dx*scale,0,s.point[2]+dz*scale]};
 });
-import {COURSE,newFlight,stepFlight} from './flight.js';
+import {COURSE,RING_RADIUS,REFERENCE,newFlight,stepFlight,flightGuidance} from './flight.js';
 
 const $=id=>document.getElementById(id), mission=new Mission();
 const scene=new THREE.Scene();
@@ -49,14 +49,14 @@ function applyBrand(){
  :root{color:#082440;--ink:#082440;--lime:#29b6f6;--line:rgba(8,36,64,.2)}
  .topbar{background:linear-gradient(180deg,#082440f5,#082440dc);color:#f4f9ff;padding:12px 30px}.brand{letter-spacing:2px}.brand img{width:210px;height:76px;object-fit:cover;border-radius:5px}.brand small{color:#b9dcef}.brand-divider{background:#ffffff40}.dot{background:#29b6f6}.round-button{color:#fff;border-color:#73b6dc}
  .intro{background:#f4f9fff0;padding:22px;border-radius:10px;border:1px solid #ffffffa0}.eyebrow{color:#096494}p{color:#274660}.primary{background:#29b6f6;color:#062039}.primary:hover:enabled{background:#6fd3ff}.secondary{background:#082440;color:#f4f9ff;border-color:#318fc0}.load-track>div,.progress-track>div{background:#29b6f6}.airport-card,.checklist-panel,.inspection,.modal>div{background:#f4f9ffed;border-color:#b9dcef}.progress-row span:last-child,li button.done{color:#26749c}li button{color:#274660;border-color:#d1e2ef}li button.current{color:#082440}li button.done .num{background:#c9eaff;border-color:#59b5e0}
- .bottom-hint,.toast,.flight-hud{background:#082440f0;color:#f4f9ff;border-color:#29b6f6}kbd,.flight-hud button{background:#194363;color:white}.sound-button{background:#f4f9ff;color:#082440}.option{background:#e7f4ff;color:#082440;border:1px solid #78bce0}.option:hover{background:#c9edff}.feedback{color:#096494}#credits{background:#082440;color:#d5e7f5}button:focus-visible,a:focus-visible{outline-color:#29b6f6}
+ .flight-hud{white-space:normal;max-width:95vw;flex-wrap:wrap}.bottom-hint,.toast,.flight-hud{background:#082440f0;color:#f4f9ff;border-color:#29b6f6}kbd,.flight-hud button{background:#194363;color:white}.sound-button{background:#f4f9ff;color:#082440}.option{background:#e7f4ff;color:#082440;border:1px solid #78bce0}.option:hover{background:#c9edff}.feedback{color:#096494}#credits{background:#082440;color:#d5e7f5}button:focus-visible,a:focus-visible{outline-color:#29b6f6}
  @media(max-width:550px){.brand img{width:150px;height:55px}.intro{padding:16px}.topbar{padding:10px 20px}}
  `;document.head.appendChild(style);
  const small=document.querySelector('.brand small');if(small)small.textContent='BY PLANO AÉREO';
  const image=new Image();image.alt='AURAV by Plano Aéreo';image.onload=()=>{const texture=new THREE.Texture(image);texture.colorSpace=THREE.SRGBColorSpace;texture.needsUpdate=true;for(const sign of brandBoards){sign.material.map.dispose();sign.material.map=texture;sign.material.needsUpdate=true;}document.querySelector('.brand').replaceChildren(image);document.body.dataset.brand='loaded';};image.onerror=()=>{document.body.dataset.brand='unavailable';};image.src='./aurav-plano-aereo.webp';
 }
 function buildWorld(){
- const ground=new THREE.Mesh(new THREE.PlaneGeometry(2400,2400),mats.ground);ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
+ const ground=new THREE.Mesh(new THREE.PlaneGeometry(3200,3200),mats.ground);ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
  box(39,.06,46,-1,-.025,2,mats.concrete);
  box(18,.07,1300,30,-.012,-500,mats.asphalt);
  box(33,.071,9,11,-.01,15,mats.asphalt);
@@ -190,11 +190,11 @@ function drawPanel(){
  pc.fillStyle=hoveredButton===0?'#ffffff':'#29b6f6';pc.beginPath();pc.roundRect(795,16,181,58,10);pc.fill();pc.fillStyle='#062039';pc.font='bold 24px Arial';pc.fillText(soundEnabled?'Sonido: sí':'Sonido: no',808,54);panelButtons.push({x:795,y:16,w:181,h:58,action:toggleSound});
  if(mission.phase==='flight'){
   wrap(flight.paused?'Vuelo en pausa':'El cielo es tuyo',48,124,900,52,'46px Arial','#f4f9ff');
-  wrap(`${Math.round(flight.speed*1.944)} KT · ${Math.round(flight.altitude*3.281)} FT · ${flight.rings}/5 aros`,48,212,900,40,'32px Arial');
-  wrap('Vuelo arcade. Stick izquierdo: subir / bajar. Stick derecho: virar. Atravesá los cinco aros luminosos.',48,280,900,38);
+  wrap(`${Math.round(flight.speed*1.944)} KT · ${Math.round(flight.altitude*3.281)} FT · ${flight.rings}/${COURSE.length} aros`,48,212,900,40,'32px Arial');
+  wrap(flightGuidance(flight),48,280,900,38);wrap('Stick izquierdo: altura. Derecho: virar. Aterrizá alineado; el frenado es automático.',48,330,900,32,'25px Arial');
   panelButton(flight.paused?'Continuar vuelo':'Pausar vuelo',420,()=>togglePause(),true);panelButton('Reiniciar vuelo',532,()=>restartFlight());panelButton('Reiniciar lista de chequeos',644,()=>resetGame());panelButton('Salir de realidad virtual',760,()=>renderer.xr.getSession()?.end());
  }else if(mission.phase==='complete'){
-  wrap('Misión completada',48,136,900,52,'48px Arial','#f4f9ff');wrap(`12 inspecciones. 5 aros. ${mission.mistakes} decisiones revisadas.`,48,238,900,40,'32px Arial');
+  wrap('Misión completada',48,136,900,52,'48px Arial','#f4f9ff');wrap(`12 inspecciones. Circuito y aterrizaje. ${mission.mistakes} decisiones revisadas.`,48,238,900,40,'32px Arial');
   wrap('El vuelo empezó con una buena inspección. Volvé al aeródromo para jugar otra vez.',48,335,900,38);
   panelButton('Jugar de nuevo',535,()=>resetGame(),true);panelButton('Salir de realidad virtual',760,()=>renderer.xr.getSession()?.end());
  }else if(panelMode==='inspection'&&activeStation!==null){
@@ -251,16 +251,22 @@ function toggleSound(){soundEnabled=!soundEnabled;$('sound').textContent=`Sonido
 $('sound').onclick=toggleSound;
 
 function showBoarding(){if(!mission.ready){showToast('Completá los doce puntos antes de volar.');return;}closeInspection();panelMode='boarding';positionPanel();
- if(!renderer.xr.isPresenting){$('inspection').classList.remove('hidden');$('inspection-zone').textContent='12 / 12 · CHEQUEO COMPLETO';$('inspection-title').textContent='Tu lugar está en el cielo';$('inspection-copy').textContent='Comienza un vuelo arcade: despegue simplificado y cinco aros para atravesar. No representa procedimientos ni física de vuelo reales.';$('inspection-feedback').textContent='';$('inspection-options').replaceChildren();const b=document.createElement('button');b.className='option';b.textContent='Iniciar vuelo arcade';b.onclick=startFlight;$('inspection-options').append(b);}}
+ if(!renderer.xr.isPresenting){$('inspection').classList.remove('hidden');$('inspection-zone').textContent='12 / 12 · CHEQUEO COMPLETO';$('inspection-title').textContent='Tu lugar está en el cielo';$('inspection-copy').textContent='Comienza un circuito arcade: despegá, rodeá el pino de referencia y regresá a aterrizar. No representa procedimientos ni física de vuelo reales.';$('inspection-feedback').textContent='';$('inspection-options').replaceChildren();const b=document.createElement('button');b.className='option';b.textContent='Iniciar vuelo arcade';b.onclick=startFlight;$('inspection-options').append(b);}}
 $('board').onclick=showBoarding;
 const flightRings=[];
-for(const p of COURSE){const mesh=new THREE.Mesh(new THREE.TorusGeometry(12,.35,8,56),new THREE.MeshBasicMaterial({color:'#29b6f6'}));mesh.position.set(p.x,p.y,p.z);mesh.visible=false;scene.add(mesh);flightRings.push(mesh);}
+for(const p of COURSE){const mesh=new THREE.Mesh(new THREE.TorusGeometry(RING_RADIUS,.35,8,56),new THREE.MeshBasicMaterial({color:'#29b6f6'}));mesh.position.set(p.x,p.y,p.z);mesh.visible=false;scene.add(mesh);flightRings.push(mesh);}
+flightRings.forEach((ring,i)=>{const prev=i?COURSE[i-1]:{x:30,z:45};ring.rotation.y=Math.atan2(COURSE[i].x-prev.x,COURSE[i].z-prev.z);});
+const referenceTree=new THREE.Group();referenceTree.position.set(REFERENCE.x,0,REFERENCE.z);scene.add(referenceTree);
+const referenceTrunk=new THREE.Mesh(new THREE.CylinderGeometry(.8,1.1,8,7),material('#66513b'));referenceTrunk.position.y=4;referenceTree.add(referenceTrunk);
+for(let i=0;i<3;i++){const crown=new THREE.Mesh(new THREE.ConeGeometry(9-i*2,18,9),material('#387b61'));crown.position.y=12+i*7;referenceTree.add(crown);}
+const referenceSign=label('PINO / REFERENCIA DE VIRAJE',23,3,'#ffffff','#082440');referenceSign.position.set(REFERENCE.x,36,REFERENCE.z);scene.add(referenceSign);
+const landingZone=new THREE.Mesh(new THREE.PlaneGeometry(14,120),new THREE.MeshBasicMaterial({color:'#29b6f6',transparent:true,opacity:.25,depthWrite:false}));landingZone.rotation.x=-Math.PI/2;landingZone.position.set(30,.065,-940);scene.add(landingZone);
 const cockpitHUD=label('AURAV / VUELO ARCADE',.52,.1,'#29b6f6','#082440');cockpitHUD.position.set(-.24,1.48,-2.33);aircraft.add(cockpitHUD);let lastInstrumentTime=0;
 function startFlight(){
  if(!mission.takeoff()){showToast('El vuelo sigue bloqueado: faltan inspecciones.');return;}
  closeInspection();flight=newFlight();flightRig.position.set(30,0,45);flightRig.rotation.set(0,0,0);flightRig.add(aircraft);flightRig.add(rig);placeRig(-.26,-1.73,[0,1.65,-20],1.65);
  if(!renderer.xr.isPresenting){yaw=0;pitch=0;camera.rotation.set(0,0,0);}
- markers.forEach(m=>{m.group.visible=false;m.floor.visible=false;});flightRings.forEach((r,i)=>{r.visible=true;r.material.color.set(i===0?'#ffffff':'#628a72');});$('hud').classList.add('hidden');$('flight-hud').classList.remove('hidden');document.body.dataset.phase='flight';panelMode='flight';panel.visible=false;sun.castShadow=false;lastPanelKey='';initAudio();showToast('Despegue arcade. Atravesá los cinco aros. W/S: altura · A/D: virar.');
+ markers.forEach(m=>{m.group.visible=false;m.floor.visible=false;});flightRings.forEach((r,i)=>{r.visible=true;r.material.color.set(i===0?'#ffffff':'#628a72');});$('hud').classList.add('hidden');$('flight-hud').classList.remove('hidden');document.body.dataset.phase='flight';panelMode='flight';panel.visible=false;sun.castShadow=false;lastPanelKey='';initAudio();showToast('Circuito arcade: seguí los anillos, rodeá el pino y volvé a aterrizar. W/S: altura · A/D: virar.');
 }
 function togglePause(){if(mission.phase!=='flight')return;flight.paused=!flight.paused;$('pause-flight').textContent=flight.paused?'Continuar':'Pausar';if(flight.paused)positionPanel();lastPanelKey='';}
 function restartFlight(){if(mission.phase!=='flight')return;returnToApron();lastInstrumentTime=0;startFlight();$('pause-flight').textContent='Pausar';}
@@ -269,14 +275,16 @@ function returnToApron(){mission.returnToApron();scene.add(aircraft);scene.add(r
 function resetGame(){returnToApron();mission.reset();mission.start();pitotCover.visible=removeTag.visible=controlLock.visible=true;for(const name of ['Object_72','Object_76','Object_78','Object_116','Object_114']){const o=model?.getObjectByName(name);if(o)o.visible=true;}panelMode='mission';$('pause-flight').textContent='Pausar';updateHUD();showToast('Nueva misión. Empezá por la cabina.');}
 $('replay').onclick=resetGame;
 const resetChecklistButton=document.createElement('button');resetChecklistButton.textContent='Reiniciar lista de chequeos';resetChecklistButton.onclick=resetGame;$('return-flight').after(resetChecklistButton);
-function finishFlight(){mission.finish();document.body.dataset.phase='complete';$('flight-hud').classList.add('hidden');$('debrief').classList.remove('hidden');$('debrief-copy').textContent=`Completaste las doce inspecciones y atravesaste los cinco aros. Revisaste ${mission.mistakes} decisiones durante el chequeo. Buen recorrido.`;positionPanel();tone(880,.45);}
+function finishFlight(){mission.finish();document.body.dataset.phase='complete';$('flight-hud').classList.add('hidden');$('debrief').classList.remove('hidden');$('debrief-copy').textContent=`Completaste las doce inspecciones, el circuito de anillos y el aterrizaje con frenado. Revisaste ${mission.mistakes} decisiones durante el chequeo. Buen recorrido.`;positionPanel();tone(880,.45);}
 function updateFlight(dt){if(flight.paused||mission.phase!=='flight')return;let climb=(keys.has('KeyW')?1:0)-(keys.has('KeyS')?1:0),turn=(keys.has('KeyD')?1:0)-(keys.has('KeyA')?1:0);
  const session=renderer.xr.getSession();if(session)for(const source of session.inputSources){const g=source.gamepad;if(!g)continue;const axes=g.axes;if(source.handedness==='left')climb=-(axes[3]??axes[1]??0);if(source.handedness==='right')turn=axes[2]??axes[0]??0;}
  const previousRing=flight.rings,event=stepFlight(flight,dt,climb,turn);flightRig.rotation.y=flight.heading;flightRig.position.set(flight.x,flight.altitude,flight.z);
- if(event==='ring'||event==='complete'){flightRings[previousRing].visible=false;if(flightRings[flight.rings])flightRings[flight.rings].material.color.set('#ffffff');tone(760,.16);if(event==='complete'){finishFlight();return;}}
- if(event==='missed'){$('pause-flight').textContent='Continuar';showToast('Aro no alcanzado. Elegí Reiniciar vuelo para empezar otra vez desde tierra.');positionPanel();}
-const stats=`${Math.round(flight.speed*1.944)} KT  ·  ${Math.round(flight.altitude*3.281)} FT  ·  AROS ${flight.rings}/5`;$('flight-stats').textContent=stats;
-if(flight.time-lastInstrumentTime>.15||flight.time<.1){const c=cockpitHUD.material.map.image.getContext('2d');c.fillStyle='#082440';c.fillRect(0,0,768,160);c.fillStyle='#29b6f6';c.textAlign='center';c.textBaseline='middle';c.font='34px Arial';c.fillText(stats,384,80);cockpitHUD.material.map.needsUpdate=true;lastInstrumentTime=flight.time;}
+ if(event==='ring'){flightRings[previousRing].visible=false;if(flightRings[flight.rings])flightRings[flight.rings].material.color.set('#ffffff');tone(760,.16);showToast(flightGuidance(flight));}
+ if(event==='touchdown'){showToast('En pista. Frenado automático: mantené la calma hasta detenerte.');tone(520,.2);}
+ if(event==='complete'){finishFlight();return;}
+ if(event==='missed'){$('pause-flight').textContent='Continuar';showToast(flight.failure+' · Elegí Reiniciar vuelo.');positionPanel();}
+const stats=`${Math.round(flight.speed*1.944)} KT  ·  ${Math.round(flight.altitude*3.281)} FT  ·  AROS ${flight.rings}/${COURSE.length}`;$('flight-stats').textContent=stats+' · '+flightGuidance(flight);
+if(flight.time-lastInstrumentTime>.15||flight.time<.1){const c=cockpitHUD.material.map.image.getContext('2d');c.fillStyle='#082440';c.fillRect(0,0,768,160);c.fillStyle='#29b6f6';c.textAlign='center';c.textBaseline='middle';c.font='30px Arial';c.fillText(stats,384,55);c.font='25px Arial';c.fillText(flightGuidance(flight),384,112);cockpitHUD.material.map.needsUpdate=true;lastInstrumentTime=flight.time;}
 }
 
 // Mouse/keyboard desktop preview shares the same mission and flight gates.
@@ -331,7 +339,7 @@ function animate(){const dt=Math.min(clock.getDelta(),.05),time=clock.elapsedTim
  if(mission.phase==='intro'&&!renderer.xr.isPresenting){rig.position.set(0,0,0);camera.position.set(-10+Math.sin(time*.09)*.25,4.1,-9.5);camera.lookAt(-.6,1.05,-.1);camera.setViewOffset(innerWidth,innerHeight,-innerWidth*.17,0,innerWidth,innerHeight);}
  else{if(camera.view?.enabled)camera.clearViewOffset();if(mission.phase==='inspection'&&!renderer.xr.isPresenting&&activeStation===null&&$('help-modal').classList.contains('hidden')){const dx=(keys.has('KeyD')?1:0)-(keys.has('KeyA')?1:0),dz=(keys.has('KeyS')?1:0)-(keys.has('KeyW')?1:0);if(dx||dz)walk(dx,dz,dt);}}
  if(renderer.xr.isPresenting)updateControllers(dt);
- if(mission.phase==='flight'){updateFlight(dt);if(!flight.paused)propellerRotor.rotation.z+=dt*(flight.speed*.8+5);}
+ if(mission.phase==='flight'){referenceSign.lookAt(getEye());updateFlight(dt);if(!flight.paused)propellerRotor.rotation.z+=dt*(flight.speed*.8+5);}
  if(engineGain){engineGain.gain.value=soundEnabled&&mission.phase==='flight'&&!flight.paused?.035:0;engineOsc.frequency.value=35+flight.speed*2;}
  if(tailAnimation>0){tailAnimation-=dt;const tail=model?.getObjectByName('Plane004_3')||model?.getObjectByName('Plane.004_3');if(tail)tail.rotation.y=Math.sin(tailAnimation*8)*.07;}
  const look=getEye();
