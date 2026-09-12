@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {Mission,STATIONS} from './mission.js';
+import {Mission,STATIONS as INSPECTION_STATIONS} from './mission.js';
+const STATIONS=INSPECTION_STATIONS.map(s=>{
+ const dx=s.stand[0]-s.point[0],dz=s.stand[2]-s.point[2],distance=Math.hypot(dx,dz);
+ const scale=Math.max(1,2.25/distance);
+ return {...s,stand:[s.point[0]+dx*scale,0,s.point[2]+dz*scale]};
+});
 import {COURSE,newFlight,stepFlight} from './flight.js';
 
 const $=id=>document.getElementById(id), mission=new Mission();
@@ -216,7 +221,7 @@ function positionPanel(forceFront=false){
   panel.position.set(station.point[0],eye.y-.08,station.point[2]).addScaledVector(forward,.45);
  }else{
   getViewDirection(forward);forward.y=0;if(forward.lengthSq()<.001)forward.set(0,0,-1);forward.normalize();
-  panel.position.copy(eye).addScaledVector(forward,1.65);panel.position.y=eye.y-.08;
+  panel.position.copy(eye).addScaledVector(forward,panelMode==='mission'?2.2:1.65);panel.position.y=eye.y-.08;
  }
  facePanel();lastPanelKey='';
 }
