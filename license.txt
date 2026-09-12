@@ -1,0 +1,11 @@
+Model Information:
+* title:	FREE Cessna 172SP
+* source:	https://sketchfab.com/3d-models/free-cessna-172sp-c9cadc2f026946da8cf9715a683739e9
+* author:	NLM (https://sketchfab.com/NLM-Group)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "FREE Cessna 172SP" (https://sketchfab.com/3d-models/free-cessna-172sp-c9cadc2f026946da8cf9715a683739e9) by NLM (https://sketchfab.com/NLM-Group) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
