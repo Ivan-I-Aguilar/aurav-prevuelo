@@ -192,7 +192,7 @@ function drawPanel(){
   wrap(flight.paused?'Vuelo en pausa':'El cielo es tuyo',48,124,900,52,'46px Arial','#f4f9ff');
   wrap(`${Math.round(flight.speed*1.944)} KT · ${Math.round(flight.altitude*3.281)} FT · ${flight.rings}/5 aros`,48,212,900,40,'32px Arial');
   wrap('Vuelo arcade. Stick izquierdo: subir / bajar. Stick derecho: virar. Atravesá los cinco aros luminosos.',48,280,900,38);
-  panelButton(flight.paused?'Continuar vuelo':'Pausar vuelo',465,()=>togglePause(),true);panelButton('Volver a plataforma',578,()=>returnToApron());panelButton('Salir de realidad virtual',760,()=>renderer.xr.getSession()?.end());
+  panelButton(flight.paused?'Continuar vuelo':'Pausar vuelo',465,()=>togglePause(),true);panelButton('Reiniciar vuelo',578,()=>restartFlight());panelButton('Salir de realidad virtual',760,()=>renderer.xr.getSession()?.end());
  }else if(mission.phase==='complete'){
   wrap('Misión completada',48,136,900,52,'48px Arial','#f4f9ff');wrap(`12 inspecciones. 5 aros. ${mission.mistakes} decisiones revisadas.`,48,238,900,40,'32px Arial');
   wrap('El vuelo empezó con una buena inspección. Volvé al aeródromo para jugar otra vez.',48,335,900,38);
@@ -263,7 +263,8 @@ function startFlight(){
  markers.forEach(m=>{m.group.visible=false;m.floor.visible=false;});flightRings.forEach((r,i)=>{r.visible=true;r.material.color.set(i===0?'#ffffff':'#628a72');});$('hud').classList.add('hidden');$('flight-hud').classList.remove('hidden');document.body.dataset.phase='flight';panelMode='flight';panel.visible=false;sun.castShadow=false;lastPanelKey='';initAudio();showToast('Despegue arcade. Atravesá los cinco aros. W/S: altura · A/D: virar.');
 }
 function togglePause(){if(mission.phase!=='flight')return;flight.paused=!flight.paused;$('pause-flight').textContent=flight.paused?'Continuar':'Pausar';if(flight.paused)positionPanel();lastPanelKey='';}
-$('pause-flight').onclick=togglePause;$('return-flight').onclick=()=>returnToApron();
+function restartFlight(){if(mission.phase!=='flight')return;returnToApron();lastInstrumentTime=0;startFlight();$('pause-flight').textContent='Pausar';}
+$('pause-flight').onclick=togglePause;$('return-flight').textContent='Reiniciar vuelo';$('return-flight').onclick=restartFlight;
 function returnToApron(){mission.returnToApron();scene.add(aircraft);scene.add(rig);flightRig.position.set(0,0,0);flightRig.rotation.set(0,0,0);aircraft.position.set(0,0,0);aircraft.rotation.set(0,0,0);flightRings.forEach(r=>r.visible=false);markers.forEach(m=>{m.group.visible=true;m.floor.visible=true;});sun.castShadow=true;$('flight-hud').classList.add('hidden');$('debrief').classList.add('hidden');$('hud').classList.remove('hidden');placeRig(-7,-6,[0,1.4,0]);panelMode=mission.ready?'ready':'mission';positionPanel();updateHUD();}
 function resetGame(){returnToApron();mission.reset();mission.start();pitotCover.visible=removeTag.visible=controlLock.visible=true;for(const name of ['Object_72','Object_76','Object_78','Object_116','Object_114']){const o=model?.getObjectByName(name);if(o)o.visible=true;}panelMode='mission';$('pause-flight').textContent='Pausar';updateHUD();showToast('Nueva misión. Empezá por la cabina.');}
 $('replay').onclick=resetGame;
@@ -272,7 +273,7 @@ function updateFlight(dt){if(flight.paused||mission.phase!=='flight')return;let 
  const session=renderer.xr.getSession();if(session)for(const source of session.inputSources){const g=source.gamepad;if(!g)continue;const axes=g.axes;if(source.handedness==='left')climb=-(axes[3]??axes[1]??0);if(source.handedness==='right')turn=axes[2]??axes[0]??0;}
  const previousRing=flight.rings,event=stepFlight(flight,dt,climb,turn);flightRig.rotation.y=flight.heading;flightRig.position.set(flight.x,flight.altitude,flight.z);
  if(event==='ring'||event==='complete'){flightRings[previousRing].visible=false;if(flightRings[flight.rings])flightRings[flight.rings].material.color.set('#ffffff');tone(760,.16);if(event==='complete'){finishFlight();return;}}
- if(event==='missed'){$('pause-flight').textContent='Continuar';showToast('Aro no alcanzado. Volvé a plataforma para reintentar el vuelo.');positionPanel();}
+ if(event==='missed'){$('pause-flight').textContent='Continuar';showToast('Aro no alcanzado. Elegí Reiniciar vuelo para empezar otra vez desde tierra.');positionPanel();}
 const stats=`${Math.round(flight.speed*1.944)} KT  ·  ${Math.round(flight.altitude*3.281)} FT  ·  AROS ${flight.rings}/5`;$('flight-stats').textContent=stats;
 if(flight.time-lastInstrumentTime>.15||flight.time<.1){const c=cockpitHUD.material.map.image.getContext('2d');c.fillStyle='#082440';c.fillRect(0,0,768,160);c.fillStyle='#29b6f6';c.textAlign='center';c.textBaseline='middle';c.font='34px Arial';c.fillText(stats,384,80);cockpitHUD.material.map.needsUpdate=true;lastInstrumentTime=flight.time;}
 }
