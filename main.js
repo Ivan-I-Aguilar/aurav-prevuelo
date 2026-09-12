@@ -192,7 +192,7 @@ function drawPanel(){
   wrap(flight.paused?'Vuelo en pausa':'El cielo es tuyo',48,124,900,52,'46px Arial','#f4f9ff');
   wrap(`${Math.round(flight.speed*1.944)} KT · ${Math.round(flight.altitude*3.281)} FT · ${flight.rings}/5 aros`,48,212,900,40,'32px Arial');
   wrap('Vuelo arcade. Stick izquierdo: subir / bajar. Stick derecho: virar. Atravesá los cinco aros luminosos.',48,280,900,38);
-  panelButton(flight.paused?'Continuar vuelo':'Pausar vuelo',465,()=>togglePause(),true);panelButton('Reiniciar vuelo',578,()=>restartFlight());panelButton('Salir de realidad virtual',760,()=>renderer.xr.getSession()?.end());
+  panelButton(flight.paused?'Continuar vuelo':'Pausar vuelo',420,()=>togglePause(),true);panelButton('Reiniciar vuelo',532,()=>restartFlight());panelButton('Reiniciar lista de chequeos',644,()=>resetGame());panelButton('Salir de realidad virtual',760,()=>renderer.xr.getSession()?.end());
  }else if(mission.phase==='complete'){
   wrap('Misión completada',48,136,900,52,'48px Arial','#f4f9ff');wrap(`12 inspecciones. 5 aros. ${mission.mistakes} decisiones revisadas.`,48,238,900,40,'32px Arial');
   wrap('El vuelo empezó con una buena inspección. Volvé al aeródromo para jugar otra vez.',48,335,900,38);
@@ -268,6 +268,7 @@ $('pause-flight').onclick=togglePause;$('return-flight').textContent='Reiniciar 
 function returnToApron(){mission.returnToApron();scene.add(aircraft);scene.add(rig);flightRig.position.set(0,0,0);flightRig.rotation.set(0,0,0);aircraft.position.set(0,0,0);aircraft.rotation.set(0,0,0);flightRings.forEach(r=>r.visible=false);markers.forEach(m=>{m.group.visible=true;m.floor.visible=true;});sun.castShadow=true;$('flight-hud').classList.add('hidden');$('debrief').classList.add('hidden');$('hud').classList.remove('hidden');placeRig(-7,-6,[0,1.4,0]);panelMode=mission.ready?'ready':'mission';positionPanel();updateHUD();}
 function resetGame(){returnToApron();mission.reset();mission.start();pitotCover.visible=removeTag.visible=controlLock.visible=true;for(const name of ['Object_72','Object_76','Object_78','Object_116','Object_114']){const o=model?.getObjectByName(name);if(o)o.visible=true;}panelMode='mission';$('pause-flight').textContent='Pausar';updateHUD();showToast('Nueva misión. Empezá por la cabina.');}
 $('replay').onclick=resetGame;
+const resetChecklistButton=document.createElement('button');resetChecklistButton.textContent='Reiniciar lista de chequeos';resetChecklistButton.onclick=resetGame;$('return-flight').after(resetChecklistButton);
 function finishFlight(){mission.finish();document.body.dataset.phase='complete';$('flight-hud').classList.add('hidden');$('debrief').classList.remove('hidden');$('debrief-copy').textContent=`Completaste las doce inspecciones y atravesaste los cinco aros. Revisaste ${mission.mistakes} decisiones durante el chequeo. Buen recorrido.`;positionPanel();tone(880,.45);}
 function updateFlight(dt){if(flight.paused||mission.phase!=='flight')return;let climb=(keys.has('KeyW')?1:0)-(keys.has('KeyS')?1:0),turn=(keys.has('KeyD')?1:0)-(keys.has('KeyA')?1:0);
  const session=renderer.xr.getSession();if(session)for(const source of session.inputSources){const g=source.gamepad;if(!g)continue;const axes=g.axes;if(source.handedness==='left')climb=-(axes[3]??axes[1]??0);if(source.handedness==='right')turn=axes[2]??axes[0]??0;}
