@@ -60,14 +60,17 @@ function buildWorld(){
  }
  // Low polygon landscape, deterministic and inexpensive in stereo.
  let seed=721;const rnd=()=>{seed=(seed*16807)%2147483647;return(seed-1)/2147483646;};
- for(let i=0;i<48;i++){
-  const angle=i/48*Math.PI*2,r=250+rnd()*160,h=20+rnd()*54;
-  const m=new THREE.Mesh(new THREE.ConeGeometry(45+rnd()*70,h,5),material(i%2?'#9aa99a':'#a9b4a0'));
-  m.position.set(Math.cos(angle)*r,h/2-2,Math.sin(angle)*r);m.rotation.y=rnd()*Math.PI;scene.add(m);
- }
- const treeGeo=new THREE.ConeGeometry(2.2,8,5),treeMat=material('#5c755c');
- const trees=new THREE.InstancedMesh(treeGeo,treeMat,100);const o=new THREE.Object3D();
- for(let i=0;i<100;i++){const a=rnd()*Math.PI*2,r=70+rnd()*110;o.position.set(Math.cos(a)*r,3.5,Math.sin(a)*r);o.scale.setScalar(.6+rnd()*.9);o.updateMatrix();trees.setMatrixAt(i,o.matrix);}scene.add(trees);
+ const ridgeGeo=new THREE.IcosahedronGeometry(1,2);
+ const vertices=ridgeGeo.attributes.position;
+ for(let i=0;i<vertices.count;i++){const x=vertices.getX(i),y=vertices.getY(i),z=vertices.getZ(i),rough=1+.12*Math.sin(x*13+z*7)*Math.cos(y*9);vertices.setXYZ(i,x*rough,y*rough,z*rough);}ridgeGeo.computeVertexNormals();
+ const ridges=new THREE.InstancedMesh(ridgeGeo,material('#a5b3a5',{flatShading:true}),28),o=new THREE.Object3D();
+ for(let i=0;i<28;i++){const side=i%2?-1:1,h=42+rnd()*72;o.position.set(side*(270+rnd()*140),-h*.22,150-Math.floor(i/2)*100);o.rotation.set(0,rnd()*Math.PI,0);o.scale.set(70+rnd()*90,h,95+rnd()*65);o.updateMatrix();ridges.setMatrixAt(i,o.matrix);ridges.setColorAt(i,new THREE.Color(i%3?'#94a695':'#b2b5a3'));}scene.add(ridges);
+ const treeCount=110,trunks=new THREE.InstancedMesh(new THREE.CylinderGeometry(.16,.25,1,6),material('#66513b'),treeCount);
+ const crowns=Array.from({length:3},()=>new THREE.InstancedMesh(new THREE.ConeGeometry(1,1,7),material('#526f55',{flatShading:true}),treeCount));
+ for(let i=0;i<treeCount;i++){const a=rnd()*Math.PI*2,r=75+rnd()*140,h=6+rnd()*7;let x=Math.cos(a)*r;const z=Math.sin(a)*r;if(Math.abs(x-30)<20)x+=x>=30?40:-40;const rotation=rnd()*Math.PI;
+  o.rotation.set(0,rotation,0);o.position.set(x,h*.21,z);o.scale.set(1,h*.42,1);o.updateMatrix();trunks.setMatrixAt(i,o.matrix);
+  for(let layer=0;layer<3;layer++){o.position.set(x,h*(.32+layer*.23),z);o.scale.set(h*(.27-layer*.065),h*.55,h*(.27-layer*.065));o.rotation.y=rotation+layer*.5;o.updateMatrix();crowns[layer].setMatrixAt(i,o.matrix);crowns[layer].setColorAt(i,new THREE.Color().setHSL(.29+rnd()*.05,.16+rnd()*.12,.62+layer*.055));}
+ }scene.add(trunks,...crowns);
  for(let i=0;i<18;i++){const x=-200+rnd()*430,z=-90-rnd()*1000;box(25+rnd()*45,.05,35+rnd()*80,x,.04,z,material(i%2?'#a2a477':'#748867'));}
  cylinder(.08,8,14,4,7,mats.white);const sock=new THREE.Group();sock.position.set(14,8,7);sock.rotation.z=-Math.PI/2.5;
  for(let i=0;i<5;i++){const m=new THREE.Mesh(new THREE.CylinderGeometry(.35-i*.04,.39-i*.04,.4,12,1,true),material(i%2?'#eee6cb':'#d78955',{side:THREE.DoubleSide}));m.position.y=i*.4;sock.add(m);}scene.add(sock);
@@ -86,7 +89,8 @@ function makeMarkers(){STATIONS.forEach((s,i)=>{
  const ring=new THREE.Mesh(new THREE.TorusGeometry(.21,.018,6,32),new THREE.MeshBasicMaterial({color:'#e0ff97'}));g.add(ring);
  const number=label(String(i+1).padStart(2,'0'),.32,.12,'#f7ffdf','#264938');number.position.y=.35;g.add(number);scene.add(g);
  const floor=new THREE.Mesh(new THREE.RingGeometry(.43,.48,32),new THREE.MeshBasicMaterial({color:'#627e52',side:THREE.DoubleSide}));floor.rotation.x=-Math.PI/2;floor.position.set(s.stand[0],.045,s.stand[2]);scene.add(floor);
- markers.push({group:g,sphere,ring,number,floor,station:s});
+ const floorTarget=new THREE.Mesh(new THREE.CircleGeometry(.55,32),new THREE.MeshBasicMaterial({side:THREE.DoubleSide,transparent:true,opacity:0,depthWrite:false}));floorTarget.userData.station=i;floor.add(floorTarget);
+ markers.push({group:g,sphere,ring,number,floor,floorTarget,station:s});
 });}
 makeMarkers();
 
@@ -109,33 +113,35 @@ new GLTFLoader(manager).load('./scene.gltf',async gltf=>{
 },undefined,loadError);
 function loadError(e){console.error(e);$('start-label').textContent='No se pudo cargar el avión';$('xr-note').textContent='Abrí el juego con INICIAR.cmd. Si el servidor está activo, recargá la página.';$('xr-note').classList.add('error');document.body.dataset.model='error';}
 
-function getEye(){return (renderer.xr.isPresenting?renderer.xr.getCamera():camera).getWorldPosition(eye);}
-function getViewDirection(out){const cam=renderer.xr.isPresenting?renderer.xr.getCamera():camera;return cam.getWorldDirection(out);}
+const headWorldMatrix=new THREE.Matrix4();
+function getHeadWorldMatrix(){rig.updateWorldMatrix(true,false);return headWorldMatrix.multiplyMatrices(rig.matrixWorld,renderer.xr.getCamera().matrix);}
+function getEye(){return renderer.xr.isPresenting?eye.setFromMatrixPosition(getHeadWorldMatrix()):camera.getWorldPosition(eye);}
+function getViewDirection(out){return renderer.xr.isPresenting?out.set(0,0,-1).transformDirection(getHeadWorldMatrix()):camera.getWorldDirection(out);}
 function placeRig(x,z,lookAt,eyeHeight=null){
  rig.position.set(x,0,z);rig.rotation.set(0,0,0);
  if(renderer.xr.isPresenting){
   // Recenter and rotate around the tracked head, including seated users.
   const head=renderer.xr.getCamera();
-  if(lookAt){const facing=new THREE.Vector3(0,0,-1).applyQuaternion(head.quaternion);const current=Math.atan2(-facing.x,-facing.z);const desired=Math.atan2(x-lookAt[0],z-lookAt[2]);rig.rotation.y=desired-current;}
-  const local=head.position.clone().applyAxisAngle(new THREE.Vector3(0,1,0),rig.rotation.y);rig.position.x-=local.x;rig.position.z-=local.z;
-  if(eyeHeight!==null)rig.position.y=eyeHeight-head.position.y;
+  if(lookAt){const facing=new THREE.Vector3(0,0,-1).transformDirection(head.matrix);const current=Math.atan2(-facing.x,-facing.z);const desired=Math.atan2(x-lookAt[0],z-lookAt[2]);rig.rotation.y=desired-current;}
+  const local=new THREE.Vector3().setFromMatrixPosition(head.matrix).applyAxisAngle(new THREE.Vector3(0,1,0),rig.rotation.y);rig.position.x-=local.x;rig.position.z-=local.z;
+  if(eyeHeight!==null)rig.position.y=eyeHeight-new THREE.Vector3().setFromMatrixPosition(head.matrix).y;
  }else{camera.position.set(0,eyeHeight??1.65,0);}
  if(lookAt&&!renderer.xr.isPresenting){camera.lookAt(lookAt[0],lookAt[1],lookAt[2]);const e=new THREE.Euler().setFromQuaternion(camera.quaternion,'YXZ');yaw=e.y;pitch=e.x;}
  rig.updateMatrixWorld(true);
 }
 function start(){if(!loaded)return;mission.start();document.body.classList.add('playing');$('intro').classList.add('hidden');$('airport-card').classList.add('hidden');$('hud').classList.remove('hidden');placeRig(-7,-6,[0,1.4,-.5]);initAudio();updateHUD();showToast('Empezá por la cabina. Cada punto cuenta.');positionPanel();}
 $('start').onclick=start;
-function goStation(i,inspect=false){if(mission.phase!=='inspection')return;const s=STATIONS[i];closeInspection();placeRig(s.stand[0],s.stand[2],s.point);positionPanel();if(inspect)openStation(i);else showToast(`${s.title} · apuntá al marcador o presioná E`);}
+function goStation(i,inspect=false){if(mission.phase!=='inspection')return;const s=STATIONS[i];closeInspection();placeRig(s.stand[0],s.stand[2],s.point);playCue('move');positionPanel();if(inspect)openStation(i);else showToast(`${s.title} · apuntá al marcador o presioná E`);}
 function nextStation(){const i=STATIONS.findIndex(s=>!mission.completed.has(s.id));if(i>=0)goStation(i,true);else showBoarding();}
-function openStation(i){const s=STATIONS[i];if(!s)return;const r=mission.open(s.id);if(!r.ok){showToast(r.message);return;}activeStation=i;panelMode='inspection';drawInspection();positionPanel();}
+function openStation(i){const s=STATIONS[i];if(!s)return;const r=mission.open(s.id);if(!r.ok){showToast(r.message);return;}activeStation=i;panelMode='inspection';drawInspection();positionPanel();playCue('open');}
 function nearestStation(){getEye();let index=-1,d=3.6;markers.forEach((m,i)=>{if(mission.completed.has(m.station.id))return;const dist=eye.distanceTo(m.group.position);if(dist<d){d=dist;index=i;}});return index;}
 function drawInspection(){
  const s=STATIONS[activeStation];if(!s)return;const step=s.steps[mission.steps[s.id]];optionOrder=step.options.map((_,i)=>i);if(step.options.length>1&&(activeStation+mission.steps[s.id])%2===1)optionOrder.reverse();
  $('inspection').classList.remove('hidden');$('inspection-zone').textContent=`${s.zone} · ${mission.steps[s.id]+1}/${s.steps.length}`;$('inspection-title').textContent=s.title;$('inspection-copy').textContent=s.intro+' '+step.text;$('inspection-feedback').textContent='';$('inspection-options').replaceChildren();
  optionOrder.forEach(index=>{const b=document.createElement('button');b.className='option';b.textContent=step.options[index];b.onclick=()=>answer(index);$('inspection-options').appendChild(b);});updateProp(s.id);lastPanelKey='';
 }
-function answer(index){const r=mission.answer(index);if(!r.ok){$('inspection-feedback').textContent=r.message||'Reintentá la inspección.';showToast(r.message||'Revisá la situación.');tone(180,.13);lastPanelKey='';return;}
- tone(600,.12);showToast(r.message);if(r.id==='cabin'&&mission.steps.cabin>=2)controlLock.visible=false;
+function answer(index){const r=mission.answer(index);if(!r.ok){$('inspection-feedback').textContent=r.message||'Reintentá la inspección.';showToast(r.message||'Revisá la situación.');playCue('incorrect');lastPanelKey='';return;}
+ playCue('correct');showToast(r.message);if(r.id==='cabin'&&mission.steps.cabin>=2)controlLock.visible=false;
  if(r.id==='pitot'){pitotCover.visible=false;removeTag.visible=false;}
  if(r.id==='tail')tailAnimation=2;
  if(r.id==='secure'&&mission.steps.secure>=1){for(const name of ['Object_72','Object_76','Object_78','Object_116','Object_114']){const o=model?.getObjectByName(name);if(o)o.visible=false;}}
@@ -163,6 +169,7 @@ function wrap(text,x,y,maxWidth,lineHeight,font='26px Arial',color='#d3ddcd'){pc
 function panelButton(text,y,action,primary=false){const selected=panelButtons.length===hoveredButton;pc.fillStyle=selected?'#ffffff':primary?'#dfff91':'#294c40';pc.beginPath();pc.roundRect(32,y,960,104,12);pc.fill();if(selected){pc.strokeStyle='#dfff91';pc.lineWidth=7;pc.stroke();}wrap(text,56,y+39,916,33,'bold 31px Arial',selected||primary?'#16352b':'#f0f5e7');panelButtons.push({x:32,y,w:960,h:104,action});}
 function drawPanel(){
  panelButtons=[];pc.fillStyle='#132e27';pc.fillRect(0,0,1024,900);pc.fillStyle='#e2ff98';pc.font='bold 30px Arial';pc.fillText(`AURAV · ${mission.completed.size}/12 COMPLETADOS`,48,55);
+ pc.fillStyle=hoveredButton===0?'#ffffff':'#dfff91';pc.beginPath();pc.roundRect(795,16,181,58,10);pc.fill();pc.fillStyle='#16352b';pc.font='bold 24px Arial';pc.fillText(soundEnabled?'Sonido: sí':'Sonido: no',808,54);panelButtons.push({x:795,y:16,w:181,h:58,action:toggleSound});
  if(mission.phase==='flight'){
   wrap(flight.paused?'Vuelo en pausa':'El cielo es tuyo',48,124,900,52,'46px Arial','#f1f6e9');
   wrap(`${Math.round(flight.speed*1.944)} KT · ${Math.round(flight.altitude*3.281)} FT · ${flight.rings}/5 aros`,48,212,900,40,'32px Arial');
@@ -174,7 +181,7 @@ function drawPanel(){
   panelButton('Jugar de nuevo',535,()=>resetGame(),true);panelButton('Salir de realidad virtual',760,()=>renderer.xr.getSession()?.end());
  }else if(panelMode==='inspection'&&activeStation!==null){
   const s=STATIONS[activeStation],step=s.steps[mission.steps[s.id]];
-  wrap(`Paso ${activeStation+1}/12 · ${s.title}`,48,120,900,45,'bold 39px Arial','#f1f6e9');wrap(`Comprobación ${mission.steps[s.id]+1} de ${s.steps.length}`,48,211,900,37,'31px Arial');wrap(step.text,48,275,900,43,'bold 35px Arial','#f5faec');
+  wrap(`Punto ${activeStation+1}/12 · ${s.title}`,48,120,900,45,'bold 39px Arial','#f1f6e9');wrap(`Comprobación ${mission.steps[s.id]+1} de ${s.steps.length}`,48,211,900,37,'31px Arial');wrap(step.text,48,275,900,43,'bold 35px Arial','#f5faec');
   optionOrder.forEach((index,i)=>panelButton(step.options[index],480+i*112,()=>answer(index),i===0));
   panelButton('Ver el avión / volver a la guía',760,()=>closeInspection());
  }else if(panelMode==='boarding'||mission.ready){
@@ -182,16 +189,25 @@ function drawPanel(){
   wrap('Ahora comienza un vuelo arcade simplificado. No representa los procedimientos de puesta en marcha, rodaje o despegue reales.',48,313,900,38);
   panelButton('Iniciar vuelo arcade',535,()=>startFlight(),true);panelButton('Seguir en tierra',648,()=>{panelMode='mission';closeInspection();});panelButton('Salir de realidad virtual',760,()=>renderer.xr.getSession()?.end());
  }else{
-  const next=STATIONS.find(s=>!mission.completed.has(s.id)),n=STATIONS.indexOf(next)+1;wrap(`Paso ${n} de 12`,48,130,900,52,'bold 47px Arial','#f1f6e9');wrap(next?.title||'¡Completado!',48,217,900,43,'bold 38px Arial');
-  wrap('Elegí el botón de abajo: te lleva al punto y abre su pregunta. Apuntá hasta iluminar la respuesta y apretá el gatillo. A: traer cartel al frente.',48,302,900,42,'32px Arial');
-  panelButton(`Ir al paso ${n}: ${next?.title||'Finalizar'}`,505,()=>nextStation(),true);panelButton(freeMove?'Movimiento libre: activo':'Solo teletransporte (confort)',617,()=>{freeMove=!freeMove;lastPanelKey='';});panelButton('Salir de realidad virtual',760,()=>renderer.xr.getSession()?.end());
+  const next=STATIONS.find(s=>!mission.completed.has(s.id)),n=STATIONS.indexOf(next)+1;wrap(mission.completed.has('cabin')?'Elegí un punto pendiente':'Primero: cabina segura',48,130,900,52,'bold 47px Arial','#f1f6e9');wrap(next?.title||'¡Completado!',48,217,900,43,'bold 38px Arial');
+  wrap('Después de la cabina, elegí cualquier marcador con el gatillo. El botón de abajo sugiere un punto pendiente. A: traer cartel al frente.',48,302,900,42,'32px Arial');
+  panelButton(`Punto sugerido ${n}: ${next?.title||'Finalizar'}`,505,()=>nextStation(),true);panelButton(freeMove?'Movimiento libre: activo':'Solo teletransporte (confort)',617,()=>{freeMove=!freeMove;lastPanelKey='';});panelButton('Salir de realidad virtual',760,()=>renderer.xr.getSession()?.end());
  }
  panelTexture.needsUpdate=true;
 }
-function positionPanel(){
- const cam=renderer.xr.isPresenting?renderer.xr.getCamera():camera;cam.getWorldPosition(tempVec);getViewDirection(forward);forward.y=0;if(forward.lengthSq()<.001)forward.set(0,0,-1);forward.normalize();
- panel.position.copy(tempVec).addScaledVector(forward,1.65);panel.position.y=tempVec.y-.08;panel.lookAt(tempVec);lastPanelKey='';
+function positionPanel(forceFront=false){
+ getEye();
+ if(!forceFront&&panelMode==='inspection'&&activeStation!==null){
+  const station=STATIONS[activeStation];
+  forward.set(station.stand[0]-station.point[0],0,station.stand[2]-station.point[2]).normalize();
+  panel.position.set(station.point[0],eye.y-.08,station.point[2]).addScaledVector(forward,.45);
+ }else{
+  getViewDirection(forward);forward.y=0;if(forward.lengthSq()<.001)forward.set(0,0,-1);forward.normalize();
+  panel.position.copy(eye).addScaledVector(forward,1.65);panel.position.y=eye.y-.08;
+ }
+ facePanel();lastPanelKey='';
 }
+function facePanel(){getEye();tempVec.copy(eye);tempVec.y=panel.position.y;panel.lookAt(tempVec);}
 function panelButtonIndex(hit){const x=hit.uv.x*1024,y=(1-hit.uv.y)*900;return panelButtons.findIndex(b=>x>=b.x-8&&x<=b.x+b.w+8&&y>=b.y-4&&y<=b.y+b.h+4);}
 function panelHitAction(hit){const b=panelButtons[panelButtonIndex(hit)];if(b){b.action();lastPanelKey='';return true;}return false;}
 function updatePanelHover(){let next=-1;for(const c of controllers){controllerRay(c);const hit=panel.visible?raycaster.intersectObject(panel,false)[0]:null;const index=hit?panelButtonIndex(hit):-1;c.userData.cursor.visible=!!hit;if(hit){c.worldToLocal(c.userData.cursor.position.copy(hit.point));c.userData.line.scale.z=hit.distance;c.userData.cursor.material.color.set(index>=0?'#ffffff':'#dfff91');}else c.userData.line.scale.z=4;if(index>=0)next=index;}if(next!==hoveredButton){hoveredButton=next;lastPanelKey='';}}
@@ -206,7 +222,15 @@ function updateProp(id){inspectionProp.visible=/fuel|oil/.test(id);jar.visible=f
 
 function initAudio(){if(audio){audio.resume();return;}try{audio=new(window.AudioContext||window.webkitAudioContext)();const size=audio.sampleRate*2,buffer=audio.createBuffer(1,size,audio.sampleRate),data=buffer.getChannelData(0);for(let i=0;i<size;i++)data[i]=(Math.random()*2-1)*.25;const source=audio.createBufferSource();source.buffer=buffer;source.loop=true;const filter=audio.createBiquadFilter();filter.type='lowpass';filter.frequency.value=500;windGain=audio.createGain();windGain.gain.value=soundEnabled?.06:0;source.connect(filter).connect(windGain).connect(audio.destination);source.start();engineOsc=audio.createOscillator();engineOsc.type='sawtooth';engineGain=audio.createGain();engineGain.gain.value=0;const engineFilter=audio.createBiquadFilter();engineFilter.type='lowpass';engineFilter.frequency.value=320;engineOsc.connect(engineFilter).connect(engineGain).connect(audio.destination);engineOsc.start();}catch(e){console.warn('Audio no disponible',e);}}
 function tone(hz,duration){if(!audio||!soundEnabled)return;const o=audio.createOscillator(),g=audio.createGain();o.frequency.value=hz;g.gain.setValueAtTime(.045,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+duration);o.connect(g).connect(audio.destination);o.start();o.stop(audio.currentTime+duration);}
-$('sound').onclick=()=>{soundEnabled=!soundEnabled;$('sound').textContent=`Sonido: ${soundEnabled?'activo':'apagado'}`;if(windGain)windGain.gain.value=soundEnabled?.06:0;};
+let lastFootstep=0;
+function playCue(kind){
+ if(!audio||!soundEnabled)return;
+ const notes={open:[[420,0,.11],[660,.08,.14]],correct:[[660,0,.12],[880,.1,.19]],incorrect:[[240,0,.12],[160,.1,.2]],move:[[180,0,.12],[270,.05,.12]],step:[[90,0,.07]]}[kind];
+ if(!notes)return;
+ for(const [hz,delay,duration] of notes){const o=audio.createOscillator(),g=audio.createGain(),t=audio.currentTime+delay;o.type=kind==='step'?'triangle':'sine';o.frequency.setValueAtTime(hz,t);g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(kind==='step'?.025:.04,t+.012);g.gain.exponentialRampToValueAtTime(.0001,t+duration);o.connect(g).connect(audio.destination);o.start(t);o.stop(t+duration);o.onended=()=>{o.disconnect();g.disconnect();};}
+}
+function toggleSound(){soundEnabled=!soundEnabled;$('sound').textContent=`Sonido: ${soundEnabled?'activo':'apagado'}`;if(windGain)windGain.gain.value=soundEnabled?.06:0;lastPanelKey='';}
+$('sound').onclick=toggleSound;
 
 function showBoarding(){if(!mission.ready){showToast('Completá los doce puntos antes de volar.');return;}closeInspection();panelMode='boarding';positionPanel();
  if(!renderer.xr.isPresenting){$('inspection').classList.remove('hidden');$('inspection-zone').textContent='12 / 12 · CHEQUEO COMPLETO';$('inspection-title').textContent='Tu lugar está en el cielo';$('inspection-copy').textContent='Comienza un vuelo arcade: despegue simplificado y cinco aros para atravesar. No representa procedimientos ni física de vuelo reales.';$('inspection-feedback').textContent='';$('inspection-options').replaceChildren();const b=document.createElement('button');b.className='option';b.textContent='Iniciar vuelo arcade';b.onclick=startFlight;$('inspection-options').append(b);}}
@@ -238,11 +262,11 @@ if(flight.time-lastInstrumentTime>.15||flight.time<.1){const c=cockpitHUD.materi
 // Mouse/keyboard desktop preview shares the same mission and flight gates.
 renderer.domElement.addEventListener('pointerdown',e=>{if(mission.phase==='intro')return;drag={x:e.clientX,y:e.clientY,moved:false};renderer.domElement.setPointerCapture(e.pointerId);});
 renderer.domElement.addEventListener('pointermove',e=>{if(!drag||renderer.xr.isPresenting)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.abs(dx)+Math.abs(dy)>2)drag.moved=true;drag.x=e.clientX;drag.y=e.clientY;yaw-=dx*.004;pitch=THREE.MathUtils.clamp(pitch-dy*.004,-1.25,1.25);camera.rotation.set(pitch,yaw,0,'YXZ');});
-renderer.domElement.addEventListener('pointerup',e=>{if(drag&&!drag.moved&&mission.phase==='inspection'){pointer.set(e.clientX/innerWidth*2-1,-e.clientY/innerHeight*2+1);raycaster.setFromCamera(pointer,camera);const hit=raycaster.intersectObjects(markers.map(m=>m.sphere),false)[0];if(hit){const i=hit.object.userData.station;if(camera.getWorldPosition(tempVec).distanceTo(markers[i].group.position)<3.6)openStation(i);else goStation(i);}}drag=null;});
+renderer.domElement.addEventListener('pointerup',e=>{if(drag&&!drag.moved&&mission.phase==='inspection'){pointer.set(e.clientX/innerWidth*2-1,-e.clientY/innerHeight*2+1);raycaster.setFromCamera(pointer,camera);const hit=raycaster.intersectObjects(markers.flatMap(m=>[m.sphere,m.floorTarget]),false)[0];if(hit){const i=hit.object.userData.station;if(hit.object===markers[i].floorTarget)goStation(i,true);else if(camera.getWorldPosition(tempVec).distanceTo(markers[i].group.position)<3.6)openStation(i);else goStation(i,true);}}drag=null;});
 addEventListener('keydown',e=>{if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;if(['Space','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();keys.add(e.code);if(e.repeat)return;if(e.code==='KeyE'&&mission.phase==='inspection'){const i=nearestStation();if(i>=0)openStation(i);else showToast('Acercate a un marcador. N te lleva al siguiente punto.');}if(e.code==='KeyN')nextStation();if(e.code==='Escape'){$('help-modal').classList.add('hidden');closeInspection();}if(e.code==='Space')togglePause();});
 addEventListener('keyup',e=>keys.delete(e.code));addEventListener('blur',()=>{keys.clear();drag=null;});
 function allowedGround(x,z){return Math.abs(x)<18&&z>-19&&z<22&&!(Math.abs(x)<1.05&&z>-4.2&&z<4.25);}
-function walk(dx,dz,dt){getViewDirection(forward);forward.y=0;forward.normalize();const right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0));const move=forward.multiplyScalar(-dz).addScaledVector(right,dx);if(move.lengthSq()>1)move.normalize();move.multiplyScalar(dt*2.4);const p=getEye().clone().add(move);if(allowedGround(p.x,p.z)){rig.position.x+=move.x;rig.position.z+=move.z;}}
+function walk(dx,dz,dt){getViewDirection(forward);forward.y=0;forward.normalize();const right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0));const move=forward.multiplyScalar(-dz).addScaledVector(right,dx);if(move.lengthSq()>1)move.normalize();move.multiplyScalar(dt*2.4);const p=getEye().clone().add(move);if(allowedGround(p.x,p.z)){rig.position.x+=move.x;rig.position.z+=move.z;if(move.lengthSq()>.000001&&performance.now()-lastFootstep>430){playCue('step');lastFootstep=performance.now();}}}
 
 async function checkVR(){try{vrAvailable=!!navigator.xr&&await navigator.xr.isSessionSupported('immersive-vr');}catch{vrAvailable=false;}updateVRButton();}
 function updateVRButton(){const b=$('enter-vr');b.disabled=!loaded||!vrAvailable;b.textContent=vrAvailable?'Entrar en realidad virtual ↗':'VR: abrir desde Meta Quest';$('xr-note').textContent=vrAvailable?'Usá los controles Touch. Espacio libre y teletransporte.':!window.isSecureContext?'VR requiere HTTPS o localhost por conexión USB. Consultá LEEME.md.':'En PC: teclado y mouse. En Quest: abrí la versión HTTPS o localhost por USB.';}
@@ -264,19 +288,19 @@ for(let i=0;i<2;i++){
  const grip=renderer.xr.getControllerGrip(i);rig.add(grip);const handle=box(.042,.085,.07,0,0,0,material('#e9eddf'),grip);handle.rotation.x=-.2;
  c.addEventListener('connected',e=>{c.userData.source=e.data;});c.addEventListener('disconnected',()=>c.userData.source=null);
  c.addEventListener('selectstart',()=>{
-  controllerRay(c);if(panel.visible){const h=raycaster.intersectObject(panel,false)[0];if(h&&h.distance<5){if(panelHitAction(h))haptic(c);return;}}
+  controllerRay(c);if(panel.visible){const h=raycaster.intersectObject(panel,false)[0];if(h&&h.distance<5&&panelHitAction(h)){haptic(c);return;}}
   if(mission.phase==='flight'){togglePause();return;}
-  if(mission.phase!=='inspection')return;const h=raycaster.intersectObjects(markers.map(m=>m.sphere),false)[0];if(h){const index=h.object.userData.station;renderer.xr.getCamera().getWorldPosition(tempVec);if(tempVec.distanceTo(markers[index].group.position)<3.6){openStation(index);haptic(c);}else showToast('Acercate con teletransporte.');}
+  if(mission.phase!=='inspection')return;const h=raycaster.intersectObjects(markers.flatMap(m=>[m.sphere,m.floorTarget]),false)[0];if(h){const index=h.object.userData.station;if(h.object===markers[index].floorTarget)goStation(index,true);else if(getEye().distanceTo(markers[index].group.position)<3.6)openStation(index);else goStation(index,true);haptic(c);}
  });
- c.addEventListener('squeezestart',()=>{if(mission.phase!=='inspection')return;const p=teleportPoint(c);if(p){closeInspection();placeRig(p.x,p.z);positionPanel();haptic(c);}});
+ c.addEventListener('squeezestart',()=>{if(mission.phase!=='inspection')return;const p=teleportPoint(c);if(p){closeInspection();placeRig(p.x,p.z);positionPanel();playCue('move');haptic(c);}});
  controllers.push(c);
 }
 function haptic(c){c.userData.source?.gamepad?.hapticActuators?.[0]?.pulse(.25,70)?.catch(()=>{});}
 function updateControllers(dt){teleportMarker.visible=false;for(const c of controllers){const source=c.userData.source,g=source?.gamepad;if(!g)continue;
- const bA=g.buttons[4]?.pressed||false,bB=g.buttons[5]?.pressed||false;if(bA&&!c.userData.aDown){if(mission.phase==='flight')togglePause();else positionPanel();}if(bB&&!c.userData.bDown)renderer.xr.getSession()?.end();c.userData.aDown=bA;c.userData.bDown=bB;
+ const bA=g.buttons[4]?.pressed||false,bB=g.buttons[5]?.pressed||false;if(bA&&!c.userData.aDown){if(mission.phase==='flight')togglePause();else positionPanel(true);}if(bB&&!c.userData.bDown)renderer.xr.getSession()?.end();c.userData.aDown=bA;c.userData.bDown=bB;
  if(mission.phase!=='inspection')continue;
  const axes=g.axes,ax=axes[2]??axes[0]??0,ay=axes[3]??axes[1]??0;
- if(source.handedness==='right'){if(Math.abs(ax)>.7&&c.userData.snapReady){const head=renderer.xr.getCamera().getWorldPosition(new THREE.Vector3());rig.rotation.y-=Math.sign(ax)*Math.PI/6;rig.updateMatrixWorld(true);const after=renderer.xr.getCamera().getWorldPosition(new THREE.Vector3());rig.position.add(head.sub(after));c.userData.snapReady=false;}if(Math.abs(ax)<.25)c.userData.snapReady=true;}
+ if(source.handedness==='right'){if(Math.abs(ax)>.7&&c.userData.snapReady){const head=getEye().clone();rig.rotation.y-=Math.sign(ax)*Math.PI/6;rig.updateMatrixWorld(true);const after=getEye().clone();rig.position.add(head.sub(after));playCue('move');c.userData.snapReady=false;}if(Math.abs(ax)<.25)c.userData.snapReady=true;}
  if(source.handedness==='left'&&freeMove&&(Math.abs(ax)>.15||Math.abs(ay)>.15))walk(ax,ay,dt);
  const p=teleportPoint(c);if(p){teleportMarker.position.copy(p);teleportMarker.visible=true;}
 }}
@@ -290,9 +314,9 @@ function animate(){const dt=Math.min(clock.getDelta(),.05),time=clock.elapsedTim
  if(mission.phase==='flight'){updateFlight(dt);if(!flight.paused)propellerRotor.rotation.z+=dt*(flight.speed*.8+5);}
  if(engineGain){engineGain.gain.value=soundEnabled&&mission.phase==='flight'&&!flight.paused?.035:0;engineOsc.frequency.value=35+flight.speed*2;}
  if(tailAnimation>0){tailAnimation-=dt;const tail=model?.getObjectByName('Plane004_3')||model?.getObjectByName('Plane.004_3');if(tail)tail.rotation.y=Math.sin(tailAnimation*8)*.07;}
- const look=(renderer.xr.isPresenting?renderer.xr.getCamera():camera).getWorldPosition(tempVec);
+ const look=getEye();
  markers.forEach((m,i)=>{m.group.visible=mission.phase==='intro'||mission.phase==='inspection';m.ring.lookAt(look);m.number.lookAt(look);m.ring.scale.setScalar(1+Math.sin(time*2+i)*.06);});
- if(renderer.xr.isPresenting){panel.visible=mission.phase==='inspection'||mission.phase==='complete'||(mission.phase==='flight'&&flight.paused);updatePanelHover();const key=[mission.phase,panelMode,activeStation,mission.completed.size,mission.active,mission.steps[mission.active],flight.paused,flight.rings,freeMove,hoveredButton].join('|');if(panel.visible&&(key!==lastPanelKey||(mission.phase==='flight'&&now-lastPanelTime>500))){drawPanel();lastPanelKey=key;lastPanelTime=now;}}
+ if(renderer.xr.isPresenting){panel.visible=mission.phase==='inspection'||mission.phase==='complete'||(mission.phase==='flight'&&flight.paused);if(panel.visible)facePanel();updatePanelHover();const key=[mission.phase,panelMode,activeStation,mission.completed.size,mission.active,mission.steps[mission.active],flight.paused,flight.rings,freeMove,hoveredButton].join('|');if(panel.visible&&(key!==lastPanelKey||(mission.phase==='flight'&&now-lastPanelTime>500))){drawPanel();lastPanelKey=key;lastPanelTime=now;}}
  else panel.visible=false;
  vrToast.visible=renderer.xr.isPresenting&&now<toastUntil;if(vrToast.visible){getEye();getViewDirection(forward);forward.y=0;forward.normalize();vrToast.position.copy(eye).addScaledVector(forward,1.9);vrToast.position.y=eye.y-.9;vrToast.lookAt(eye);}
  if(now>toastUntil)$('toast').classList.add('hidden');
