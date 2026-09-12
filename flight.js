@@ -3,7 +3,7 @@ export function newFlight(){return{speed:0,altitude:0,time:0,rings:0,paused:fals
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export function stepFlight(f,delta,climb=0,turn=0){
  if(f.paused||f.rings>=COURSE.length)return null;
- const dt=clamp(delta,0,.05);f.time+=dt;f.speed=Math.min(42,f.speed+dt*3.2);
+ const dt=clamp(delta,0,.05);f.time+=dt;f.speed=Math.min(35,f.speed+dt*2.7);
  const target=COURSE[f.rings];
  // Assisted arcade climb keeps the introductory flight accessible in a headset.
  const assist=f.time>5&&f.rings===0?clamp((35-f.altitude)*.8,-4,6):0;
