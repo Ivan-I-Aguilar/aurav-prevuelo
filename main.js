@@ -38,7 +38,7 @@ function canvasTexture(w,h,draw){const c=document.createElement('canvas');c.widt
 function label(text,w=2,h=.45,fg='#f4f9ff',bg='#082440'){const tex=canvasTexture(768,160,(c,W,H)=>{c.fillStyle=bg;c.fillRect(0,0,W,H);c.fillStyle=fg;c.textAlign='center';c.textBaseline='middle';c.font='600 46px Arial';c.fillText(text,W/2,H/2);});return new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide}));}
 
 const brandBoards=[];
-function brandSign(width){const sign=label('AURAV / PLANO AÉREO',width,width*.572,'#ffffff','#082440');brandBoards.push(sign);return sign;}
+function brandSign(width){const sign=label('AURAV / PLANO AÉREO',width,width*.572,'#ffffff','#082440');sign.material.side=THREE.FrontSide;const back=sign.clone();back.material=sign.material.clone();back.rotation.y=Math.PI;back.position.z=-.006;const group=new THREE.Group();group.add(sign,back);brandBoards.push(sign,back);return group;}
 function applyBrand(){
  const style=document.createElement('style');style.textContent=`
  :root{color:#082440;--ink:#082440;--lime:#29b6f6;--line:rgba(8,36,64,.2)}
