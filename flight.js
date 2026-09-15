@@ -1,11 +1,13 @@
+// El tramo final corre sobre el eje de la pista: se sale del anteúltimo anillo ya alineado
+// y quedan 340 m de aproximación recta para acomodar rumbo y descenso antes de tocar.
 export const COURSE=[
  {x:30,y:35,z:-150,name:'Salida'},
  {x:100,y:55,z:-350,name:'Ascenso'},
  {x:200,y:65,z:-650,name:'Hacia el pino'},
- {x:200,y:65,z:-1000,name:'Rodeá la referencia'},
- {x:100,y:55,z:-1250,name:'Viraje de regreso'},
- {x:-40,y:38,z:-1250,name:'Buscá la cabecera'},
- {x:30,y:16,z:-1080,name:'Final a pista'}
+ {x:200,y:65,z:-1050,name:'Rodeá el pino'},
+ {x:175,y:60,z:-1600,name:'Viraje de regreso'},
+ {x:30,y:55,z:-1500,name:'Alineate con la pista'},
+ {x:30,y:30,z:-1160,name:'Final a pista'}
 ];
 export const RING_RADIUS=18;
 export const RUNWAY={x:30,halfWidth:9,minZ:-1150,maxZ:150};
