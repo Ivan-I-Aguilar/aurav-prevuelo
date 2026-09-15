@@ -6,14 +6,14 @@
   <title>AURAV · Antes de volar</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23102724'/%3E%3Cpath d='M48 15h5l4 30 30 18v7L56 59v19l10 8v4l-15-4-15 4v-4l10-8V59L15 70v-7l29-18z' fill='%23ddff82'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
-  <script type="importmap">{"imports":{"./flight.js":"./flight.js?v=20260912-circuit","three":"./three.module.js","three/addons/loaders/GLTFLoader.js":"./GLTFLoader.js"}}</script>
+  <script type="importmap">{"imports":{"./flight.js":"./flight.js?v=20260914-preguntas","three":"./three.module.js","three/addons/loaders/GLTFLoader.js":"./GLTFLoader.js"}}</script>
 </head>
 <body>
   <main id="world" aria-label="Aeródromo tridimensional"></main>
   <header class="topbar">
     <a class="brand" href="./" aria-label="AURAV inicio"><span class="brand-icon">↗</span>AURAV<span class="brand-divider"></span><small>FLIGHT EXPERIENCES</small></a>
     <div class="session-tag"><span class="dot"></span>CESSNA 172SP <span class="muted">/</span> PREVUELO</div>
-    <button id="help" class="round-button" aria-label="Ver controles">?</button>
+    <div class="topbar-acciones"><button id="salir" class="round-button" aria-label="Salir del juego" title="Salir del juego">✕</button><button id="help" class="round-button" aria-label="Ver controles">?</button></div>
   </header>
   <section id="intro" class="intro">
     <div class="eyebrow">TU VUELO EMPIEZA EN TIERRA</div>
@@ -33,10 +33,11 @@
   </div>
   <section id="inspection" class="inspection hidden" aria-live="polite"><div class="eyebrow" id="inspection-zone"></div><h2 id="inspection-title"></h2><p id="inspection-copy"></p><div id="inspection-options"></div><div id="inspection-feedback"></div><button id="close-inspection" class="text-button">Volver al recorrido</button></section>
   <section id="help-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="help-title"><div><div class="eyebrow">LISTO PARA EXPLORAR</div><h2 id="help-title">A tu ritmo.</h2><h3>En Meta Quest 3S</h3><p>Apuntá con el control y usá el <b>gatillo</b> para inspeccionar o elegir una respuesta. Apuntá al suelo y apretá el <b>agarre</b> para teletransportarte. El stick derecho gira de a 30°. Stick izquierdo: caminar, si activás movimiento libre con el botón de abajo.</p><h3>En computadora</h3><p><b>WASD</b> para caminar; arrastrá el escenario para mirar. <b>E</b> inspecciona el punto cercano. <b>N</b> te lleva a la próxima zona. También podés usar la lista de la izquierda.</p><h3>Durante el vuelo arcade</h3><p>Stick izquierdo o <b>W/S</b>: ascender y descender. Stick derecho o <b>A/D</b>: virar. <b>Espacio</b> o botón <b>A</b>: pausar. En VR, el botón <b>B</b> termina la sesión.</p><button id="comfort" class="secondary">Movimiento VR: solo teletransporte</button><p class="small-note">Juego con inspecciones simplificadas. No sustituye el POH, una checklist aprobada ni instrucción de vuelo.</p><button id="close-help" class="primary">Entendido <span>↗</span></button></div></section>
+  <section id="reporte" class="modal hidden"><div><div class="eyebrow">RESULTADO DEL CHEQUEO</div><h2 id="reporte-nota">—</h2><p id="reporte-resumen"></p><ol id="reporte-detalle"></ol><label class="reporte-alumno">Nombre del alumno<input id="reporte-alumno" type="text" placeholder="Para que figure en el resultado" autocomplete="name"></label><div class="reporte-acciones"><button id="reporte-copiar" class="secondary">Copiar resultado</button><button id="reporte-volar" class="primary">Subir y volar <span>↗</span></button></div><button id="reporte-cerrar" class="text-button">Seguir en tierra</button></div></section>
   <section id="debrief" class="modal hidden"><div><div class="eyebrow">MISIÓN COMPLETADA</div><h2>El cielo<br>es tuyo.</h2><p id="debrief-copy"></p><button id="replay" class="primary">Volver a empezar <span>↗</span></button></div></section>
   <div id="flight-hud" class="flight-hud hidden"><span>AURAV / VUELO ARCADE</span><strong id="flight-stats"></strong><button id="pause-flight">Pausar</button><button id="return-flight">Volver a plataforma</button></div>
   <div id="toast" class="toast hidden" role="status"></div>
   <footer id="credits">PROTOTIPO INTERACTIVO · <a href="credits.html" target="_blank" rel="noopener">MODELO 3D: NLM / CC BY 4.0</a><span>EXPLORÁ. VERIFICÁ. VOLÁ.</span></footer>
-  <script type="module" src="main.js?v=20260912-landing"></script>
+  <script type="module" src="main.js?v=20260914-preguntas"></script>
 </body>
 </html>
