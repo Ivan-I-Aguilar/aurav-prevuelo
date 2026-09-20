@@ -122,6 +122,8 @@ export const STATIONS = [
 export class Mission {
  constructor(){this.reset();}
  reset(){this.completed=new Set();this.steps=Object.fromEntries(STATIONS.map(s=>[s.id,0]));this.active=null;this.phase='intro';this.mistakes=0;this.startedAt=0;
+  // Modo demostración: vuelo suelto desde la portada, sin chequeo y sin nota. Solo para mostrar el juego.
+  this.esDemo=false;
   // Registro de examen: por cada punto, cuántas respuestas incorrectas hubo y cuándo se aprobó.
   this.registro=Object.fromEntries(STATIONS.map(s=>[s.id,{errores:0,ok:false,ms:0}]));this.terminadoEn=0;}
  start(){if(this.phase==='intro'){this.phase='inspection';this.startedAt=Date.now();}}
@@ -150,6 +152,9 @@ export class Mission {
   l.push('','Juego con inspecciones simplificadas. No sustituye el POH ni una checklist aprobada.');
   return l.join('\n');}
  takeoff(){if(this.phase!=='inspection'||!this.ready)return false;this.active=null;this.phase='flight';return true;}
+ // Demo: solo se entra desde la portada (phase 'intro'). Una vez adentro se puede reiniciar el vuelo.
+ // Nunca se puede activar en medio del recorrido, así que el chequeo sigue siendo la única puerta al vuelo real.
+ demo(){if(this.phase!=='intro'&&!this.esDemo)return false;this.active=null;this.esDemo=true;this.phase='flight';return true;}
  finish(){if(this.phase!=='flight')return false;this.phase='complete';return true;}
  returnToApron(){if(this.phase==='flight'||this.phase==='complete'){this.phase='inspection';return true;}return false;}
 }
