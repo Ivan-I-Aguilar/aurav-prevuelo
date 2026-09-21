@@ -112,6 +112,19 @@ const pitotCover=box(.13,.12,.43,-3.35,1.78,-1.64,material('#c74535'),aircraft);
 const removeTag=label('REMOVE BEFORE FLIGHT',.7,.14,'#fff7e7','#b62d2b');removeTag.position.set(-3.35,1.55,-1.65);aircraft.add(removeTag);
 const controlLock=box(.035,.3,.035,-.2,1.4,-2.1,material('#d34b37'),aircraft);
 
+// Matrícula a ambos lados del fuselaje. La «N923A» que traía el modelo se borró de
+// Body_baseColor.png; acá se dibuja la propia como cartel transparente pegado a la chapa,
+// en el mismo lugar, tamaño y color. Cambiá MATRICULA para la versión de cada escuela.
+const MATRICULA='LV-AUR';
+function matricula(texto,lado){
+ const tex=canvasTexture(1024,320,(c,W,H)=>{c.clearRect(0,0,W,H);c.fillStyle='#46413a';c.textAlign='center';c.textBaseline='middle';c.font='bold italic 210px Arial';c.fillText(texto,W/2,H/2+8);});
+ tex.anisotropy=4;
+ const m=new THREE.Mesh(new THREE.PlaneGeometry(.92,.29),new THREE.MeshBasicMaterial({map:tex,transparent:true,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));
+ // Detrás de la puerta, sobre la franja lateral; el fuselaje se afina hacia la cola (~9°).
+ m.position.set(lado*.47,1.16,.72);m.rotation.y=lado*(Math.PI/2-.15);aircraft.add(m);return m;
+}
+matricula(MATRICULA,1);matricula(MATRICULA,-1);
+
 function makeMarkers(){STATIONS.forEach((s,i)=>{
  const g=new THREE.Group();g.position.fromArray(s.point);
  const sphere=new THREE.Mesh(new THREE.SphereGeometry(.13,16,12),new THREE.MeshBasicMaterial({color:'#29b6f6'}));sphere.userData.station=i;g.add(sphere);
