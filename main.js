@@ -57,6 +57,9 @@ function applyBrand(){
  #reporte li b{font-weight:600;color:#082440}#reporte li span{color:#4d7a96;white-space:nowrap}#reporte li.mal span{color:#a3342e}
  .reporte-alumno{display:block;font-size:11px;color:#4d7a96;margin-top:6px}.reporte-alumno input{width:100%;margin-top:6px;padding:10px;border:1px solid #b9dcef;border-radius:4px;font:inherit;font-size:13px;background:#fff;color:#082440}
  .reporte-acciones{display:flex;gap:10px;margin-top:16px}.reporte-acciones button{margin-top:0}
+ .intro{top:112px;width:380px;max-height:calc(100vh - 170px);overflow:auto;scrollbar-width:thin}.intro h1{font-size:clamp(52px,5.6vw,84px);letter-spacing:-4px;margin:0 0 16px}.intro .eyebrow{margin-bottom:12px}.intro p{margin:0 0 4px}.mission-specs{margin:18px 0;padding-top:16px}.intro .secondary{margin-top:8px}.intro .small-note{margin-top:12px}
+ .airport-card{display:none}#credits{font-size:9px}
+ @media(max-width:550px){.intro{top:96px;width:calc(100% - 32px);left:16px;max-height:calc(100vh - 150px)}.intro h1{font-size:56px}}
  .checklist-panel{display:flex;flex-direction:column;overflow:hidden}.checklist-panel ol{flex:1 1 auto;min-height:0;overflow-y:auto}.checklist-panel .primary{flex:0 0 auto;margin-top:10px}
  @media(max-width:550px){.brand img{width:150px;height:55px}.intro{padding:16px}.topbar{padding:10px 20px}}
  `;document.head.appendChild(style);
@@ -133,11 +136,11 @@ new GLTFLoader(manager).load('./scene.gltf',async gltf=>{
    }
    if(m.name==='Window'){m.transparent=true;m.opacity=.18;m.depthWrite=false;}
   }});
-  aircraft.add(model);aircraft.updateMatrixWorld(true);for(const name of ['Object_39','Object_40']){const part=model.getObjectByName(name);if(part)propellerRotor.attach(part);}loaded=true;$('start').disabled=false;$('ver-vuelo').disabled=false;$('start-label').textContent='Comenzar recorrido';$('load-progress').style.width='100%';updateVRButton();
+  aircraft.add(model);aircraft.updateMatrixWorld(true);for(const name of ['Object_39','Object_40']){const part=model.getObjectByName(name);if(part)propellerRotor.attach(part);}loaded=true;$('start').disabled=false;$('ver-vuelo').disabled=false;$('start-label').textContent='Comenzar recorrido';$('load-progress').style.width='100%';setTimeout(()=>$('load-progress').parentElement.classList.add('hidden'),600);updateVRButton();
   document.body.dataset.model='loaded';
  }catch(e){loadError(e);}
 },undefined,loadError);
-function loadError(e){console.error(e);$('start-label').textContent='No se pudo cargar el avión';$('xr-note').textContent='Abrí el juego con INICIAR.cmd. Si el servidor está activo, recargá la página.';$('xr-note').classList.add('error');document.body.dataset.model='error';}
+function loadError(e){console.error(e);$('start-label').textContent='No se pudo cargar el avión';$('xr-note').textContent='Revisá la conexión a internet y recargá la página.';$('xr-note').classList.add('error');document.body.dataset.model='error';}
 
 const headWorldMatrix=new THREE.Matrix4();
 function getHeadWorldMatrix(){rig.updateWorldMatrix(true,false);return headWorldMatrix.multiplyMatrices(rig.matrixWorld,renderer.xr.getCamera().matrix);}
@@ -371,9 +374,9 @@ function allowedGround(x,z){return Math.abs(x)<18&&z>-19&&z<22&&!(Math.abs(x)<1.
 function walk(dx,dz,dt){getViewDirection(forward);forward.y=0;forward.normalize();const right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0));const move=forward.multiplyScalar(-dz).addScaledVector(right,dx);if(move.lengthSq()>1)move.normalize();move.multiplyScalar(dt*2.4);const p=getEye().clone().add(move);if(allowedGround(p.x,p.z)){rig.position.x+=move.x;rig.position.z+=move.z;if(move.lengthSq()>.000001&&performance.now()-lastFootstep>430){playCue('step');lastFootstep=performance.now();}}}
 
 async function checkVR(){try{vrAvailable=!!navigator.xr&&await navigator.xr.isSessionSupported('immersive-vr');}catch{vrAvailable=false;}updateVRButton();}
-function updateVRButton(){const b=$('enter-vr');b.disabled=!loaded||!vrAvailable;b.textContent=vrAvailable?'Entrar en realidad virtual ↗':'VR: abrir desde Meta Quest';
+function updateVRButton(){const b=$('enter-vr');b.disabled=!loaded||!vrAvailable;b.textContent='Entrar en realidad virtual ↗';b.classList.toggle('hidden',!vrAvailable);
  // Desde el visor, la demo también entra en realidad virtual: el botón lo dice.
- const d=$('ver-vuelo');if(d)d.textContent=vrAvailable?'Ver el vuelo en realidad virtual ↗':'Ver el vuelo ↗';$('xr-note').textContent=vrAvailable?'Usá los controles Touch. Espacio libre y teletransporte.':!window.isSecureContext?'VR requiere HTTPS o localhost por conexión USB. Consultá LEEME.md.':'En PC: teclado y mouse. En Quest: abrí la versión HTTPS o localhost por USB.';}
+ const d=$('ver-vuelo');if(d)d.textContent=vrAvailable?'Ver el vuelo en realidad virtual ↗':'Ver el vuelo ↗';$('xr-note').textContent=vrAvailable?'Usá los controles Touch. Espacio libre y teletransporte.':'En computadora, con teclado y mouse. En celular, tocando. Con un visor Meta Quest, abrí este mismo enlace desde el visor.';}
 // Pide la sesión de realidad virtual. Devuelve true si el visor quedó activo.
 // Lo usan los dos botones de la portada: el del recorrido y el de la demo del vuelo.
 async function entrarVR(){if(!loaded||!vrAvailable)return false;try{
