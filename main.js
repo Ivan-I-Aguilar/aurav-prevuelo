@@ -144,13 +144,18 @@ function getHeadWorldMatrix(){rig.updateWorldMatrix(true,false);return headWorld
 function getEye(){return renderer.xr.isPresenting?eye.setFromMatrixPosition(getHeadWorldMatrix()):camera.getWorldPosition(eye);}
 function getViewDirection(out){return renderer.xr.isPresenting?out.set(0,0,-1).transformDirection(getHeadWorldMatrix()):camera.getWorldDirection(out);}
 function placeRig(x,z,lookAt,eyeHeight=null){
+ // La cámara del visor cuelga del rig, así que su matriz viene en coordenadas del mundo.
+ // Mientras el rig vivió en la escena eso casi coincidía. En vuelo el rig pasa a colgar del avión,
+ // que va a 30 metros de costado y subiendo: usar la posición del mundo para sentar al piloto
+ // lo deja por encima del techo. Se convierte la cabeza al espacio del rig antes de calcular nada.
+ const previo=renderer.xr.isPresenting?rig.matrixWorld.clone().invert():null;
  rig.position.set(x,0,z);rig.rotation.set(0,0,0);
  if(renderer.xr.isPresenting){
-  // Recenter and rotate around the tracked head, including seated users.
   const head=renderer.xr.getCamera();
-  if(lookAt){const facing=new THREE.Vector3(0,0,-1).transformDirection(head.matrix);const current=Math.atan2(-facing.x,-facing.z);const desired=Math.atan2(x-lookAt[0],z-lookAt[2]);rig.rotation.y=desired-current;}
-  const local=new THREE.Vector3().setFromMatrixPosition(head.matrix).applyAxisAngle(new THREE.Vector3(0,1,0),rig.rotation.y);rig.position.x-=local.x;rig.position.z-=local.z;
-  if(eyeHeight!==null)rig.position.y=eyeHeight-new THREE.Vector3().setFromMatrixPosition(head.matrix).y;
+  const cabeza=new THREE.Vector3().setFromMatrixPosition(head.matrix).applyMatrix4(previo);
+  if(lookAt){const facing=new THREE.Vector3(0,0,-1).transformDirection(head.matrix).transformDirection(previo);const current=Math.atan2(-facing.x,-facing.z);const desired=Math.atan2(x-lookAt[0],z-lookAt[2]);rig.rotation.y=desired-current;}
+  const local=cabeza.clone().applyAxisAngle(new THREE.Vector3(0,1,0),rig.rotation.y);rig.position.x-=local.x;rig.position.z-=local.z;
+  if(eyeHeight!==null)rig.position.y=eyeHeight-cabeza.y;
  }else{camera.position.set(0,eyeHeight??1.65,0);}
  if(lookAt&&!renderer.xr.isPresenting){camera.lookAt(lookAt[0],lookAt[1],lookAt[2]);const e=new THREE.Euler().setFromQuaternion(camera.quaternion,'YXZ');yaw=e.y;pitch=e.x;}
  rig.updateMatrixWorld(true);
@@ -333,10 +338,7 @@ function startFlight(){
  // desde el recorrido, solo con los doce puntos aprobados.
  const autorizado=(mission.phase==='intro'||mission.esDemo)?mission.demo():mission.takeoff();
  if(!autorizado){showToast('El vuelo sigue bloqueado: faltan inspecciones.');return;}
- closeInspection();flight=newFlight();flightRig.position.set(30,0,45);flightRig.rotation.set(0,0,0);flightRig.add(aircraft);flightRig.add(rig);placeRig(-.26,-1.73,[0,1.65,-20],1.65);
- // Segunda pasada en VR: con la cabeza ya ubicada, el asiento queda donde corresponde.
- if(renderer.xr.isPresenting)setTimeout(()=>{if(mission.phase==='flight')placeRig(-.26,-1.73,[0,1.65,-20],1.65);},400);
- if(!renderer.xr.isPresenting){yaw=0;pitch=0;camera.rotation.set(0,0,0);}
+ closeInspection();flight=newFlight();flightRig.position.set(30,0,45);flightRig.rotation.set(0,0,0);flightRig.add(aircraft);flightRig.add(rig);placeRig(-.26,-1.73,[0,1.65,-20],1.65); if(!renderer.xr.isPresenting){yaw=0;pitch=0;camera.rotation.set(0,0,0);}
  markers.forEach(m=>{m.group.visible=false;m.floor.visible=false;});flightRings.forEach((r,i)=>{r.visible=true;r.material.color.set(i===0?'#ffffff':'#4b7fa0');});$('hud').classList.add('hidden');$('flight-hud').classList.remove('hidden');document.body.dataset.phase='flight';panelMode='flight';panel.visible=false;sun.castShadow=false;lastPanelKey='';initAudio();showToast(mission.esDemo?'Vuelo de muestra: seguí los anillos, rodeá el pino y volvé a aterrizar. W/S: altura · A/D: virar. Con ✕ volvés a la portada.':'Circuito arcade: seguí los anillos, rodeá el pino y volvé a aterrizar. W/S: altura · A/D: virar.');
 }
 function togglePause(){if(mission.phase!=='flight')return;flight.paused=!flight.paused;$('pause-flight').textContent=flight.paused?'Continuar':'Pausar';if(flight.paused)positionPanel();lastPanelKey='';}
