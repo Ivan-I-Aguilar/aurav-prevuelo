@@ -164,8 +164,12 @@ $('start').onclick=start;
 // El pedido de sesión va antes que cualquier otra cosa, porque el navegador solo lo permite
 // dentro del gesto del usuario que abrió el botón.
 async function verVueloDemo(){if(!loaded)return;
- if(vrAvailable&&!renderer.xr.isPresenting&&!await entrarVR())return;
+ if(vrAvailable&&!renderer.xr.isPresenting){if(!await entrarVR())return;await esperarPoseXR();}
  document.body.classList.add('playing');$('intro').classList.add('hidden');$('airport-card').classList.add('hidden');initAudio();startFlight();}
+// Recién iniciada la sesión, el visor todavía no informó dónde está la cabeza: la matriz viene vacía.
+// Sentar al piloto con ese dato lo deja corrido (parado sobre el ala). Se espera un par de cuadros reales.
+function esperarPoseXR(){const s=renderer.xr.getSession();if(!s)return Promise.resolve();
+ return new Promise(listo=>{let cuadros=0;const paso=()=>{if(++cuadros>=3)listo();else s.requestAnimationFrame(paso);};s.requestAnimationFrame(paso);setTimeout(listo,900);});}
 $('ver-vuelo').onclick=verVueloDemo;
 function salirDelJuego(){
  if(renderer.xr.isPresenting)renderer.xr.getSession()?.end();
@@ -330,6 +334,8 @@ function startFlight(){
  const autorizado=(mission.phase==='intro'||mission.esDemo)?mission.demo():mission.takeoff();
  if(!autorizado){showToast('El vuelo sigue bloqueado: faltan inspecciones.');return;}
  closeInspection();flight=newFlight();flightRig.position.set(30,0,45);flightRig.rotation.set(0,0,0);flightRig.add(aircraft);flightRig.add(rig);placeRig(-.26,-1.73,[0,1.65,-20],1.65);
+ // Segunda pasada en VR: con la cabeza ya ubicada, el asiento queda donde corresponde.
+ if(renderer.xr.isPresenting)setTimeout(()=>{if(mission.phase==='flight')placeRig(-.26,-1.73,[0,1.65,-20],1.65);},400);
  if(!renderer.xr.isPresenting){yaw=0;pitch=0;camera.rotation.set(0,0,0);}
  markers.forEach(m=>{m.group.visible=false;m.floor.visible=false;});flightRings.forEach((r,i)=>{r.visible=true;r.material.color.set(i===0?'#ffffff':'#4b7fa0');});$('hud').classList.add('hidden');$('flight-hud').classList.remove('hidden');document.body.dataset.phase='flight';panelMode='flight';panel.visible=false;sun.castShadow=false;lastPanelKey='';initAudio();showToast(mission.esDemo?'Vuelo de muestra: seguí los anillos, rodeá el pino y volvé a aterrizar. W/S: altura · A/D: virar. Con ✕ volvés a la portada.':'Circuito arcade: seguí los anillos, rodeá el pino y volvé a aterrizar. W/S: altura · A/D: virar.');
 }
