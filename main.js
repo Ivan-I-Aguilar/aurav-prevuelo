@@ -160,7 +160,12 @@ function start(){if(!loaded)return;if(tactil)$('bottom-hint').textContent='Tocá
 $('start').onclick=start;
 // Demo de portada: entra derecho al vuelo arcade para poder mostrarlo sin hacer los doce puntos.
 // La autorización la sigue dando mission.js; desde el recorrido este atajo no existe.
-function verVueloDemo(){if(!loaded)return;document.body.classList.add('playing');$('intro').classList.add('hidden');$('airport-card').classList.add('hidden');initAudio();startFlight();}
+// Si hay visor, primero entra en realidad virtual y después despega: un solo botón para las dos cosas.
+// El pedido de sesión va antes que cualquier otra cosa, porque el navegador solo lo permite
+// dentro del gesto del usuario que abrió el botón.
+async function verVueloDemo(){if(!loaded)return;
+ if(vrAvailable&&!renderer.xr.isPresenting&&!await entrarVR())return;
+ document.body.classList.add('playing');$('intro').classList.add('hidden');$('airport-card').classList.add('hidden');initAudio();startFlight();}
 $('ver-vuelo').onclick=verVueloDemo;
 function salirDelJuego(){
  if(renderer.xr.isPresenting)renderer.xr.getSession()?.end();
@@ -358,12 +363,17 @@ function allowedGround(x,z){return Math.abs(x)<18&&z>-19&&z<22&&!(Math.abs(x)<1.
 function walk(dx,dz,dt){getViewDirection(forward);forward.y=0;forward.normalize();const right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0));const move=forward.multiplyScalar(-dz).addScaledVector(right,dx);if(move.lengthSq()>1)move.normalize();move.multiplyScalar(dt*2.4);const p=getEye().clone().add(move);if(allowedGround(p.x,p.z)){rig.position.x+=move.x;rig.position.z+=move.z;if(move.lengthSq()>.000001&&performance.now()-lastFootstep>430){playCue('step');lastFootstep=performance.now();}}}
 
 async function checkVR(){try{vrAvailable=!!navigator.xr&&await navigator.xr.isSessionSupported('immersive-vr');}catch{vrAvailable=false;}updateVRButton();}
-function updateVRButton(){const b=$('enter-vr');b.disabled=!loaded||!vrAvailable;b.textContent=vrAvailable?'Entrar en realidad virtual ↗':'VR: abrir desde Meta Quest';$('xr-note').textContent=vrAvailable?'Usá los controles Touch. Espacio libre y teletransporte.':!window.isSecureContext?'VR requiere HTTPS o localhost por conexión USB. Consultá LEEME.md.':'En PC: teclado y mouse. En Quest: abrí la versión HTTPS o localhost por USB.';}
-$('enter-vr').onclick=async()=>{if(!loaded||!vrAvailable)return;try{
+function updateVRButton(){const b=$('enter-vr');b.disabled=!loaded||!vrAvailable;b.textContent=vrAvailable?'Entrar en realidad virtual ↗':'VR: abrir desde Meta Quest';
+ // Desde el visor, la demo también entra en realidad virtual: el botón lo dice.
+ const d=$('ver-vuelo');if(d)d.textContent=vrAvailable?'Ver el vuelo en realidad virtual ↗':'Ver el vuelo ↗';$('xr-note').textContent=vrAvailable?'Usá los controles Touch. Espacio libre y teletransporte.':!window.isSecureContext?'VR requiere HTTPS o localhost por conexión USB. Consultá LEEME.md.':'En PC: teclado y mouse. En Quest: abrí la versión HTTPS o localhost por USB.';}
+// Pide la sesión de realidad virtual. Devuelve true si el visor quedó activo.
+// Lo usan los dos botones de la portada: el del recorrido y el de la demo del vuelo.
+async function entrarVR(){if(!loaded||!vrAvailable)return false;try{
  const session=await navigator.xr.requestSession('immersive-vr',{requiredFeatures:['local-floor'],optionalFeatures:['bounded-floor']});
  vrEntryPose={position:rig.position.clone(),cameraPosition:camera.position.clone(),quaternion:camera.quaternion.clone(),yaw,pitch};
- await renderer.xr.setSession(session);if(mission.phase==='intro')start();else positionPanel();
- }catch(e){console.error(e);showToast('No se pudo iniciar VR. Revisá la conexión del visor y volvé a intentar.');}};
+ await renderer.xr.setSession(session);return true;
+ }catch(e){console.error(e);showToast('No se pudo iniciar VR. Revisá la conexión del visor y volvé a intentar.');return false;}}
+$('enter-vr').onclick=async()=>{if(!await entrarVR())return;if(mission.phase==='intro')start();else positionPanel();};
 checkVR();
 renderer.xr.addEventListener('sessionstart',()=>{document.body.classList.add('immersive');initAudio();setTimeout(positionPanel,300);if(mission.phase==='inspection')showToast('Apuntá a un marcador y gatillo para inspeccionar. Botón A: tablero. Botón B: salir.');});
 renderer.xr.addEventListener('sessionend',()=>{document.body.classList.remove('immersive');panel.visible=false;if(mission.phase==='flight'){flight.paused=true;$('pause-flight').textContent='Continuar';}if(mission.phase==='inspection'){placeRig(-7,-6,[0,1.4,0]);}else{camera.position.set(0,1.65,0);camera.rotation.set(0,0,0);yaw=0;pitch=0;}vrEntryPose=null;});
