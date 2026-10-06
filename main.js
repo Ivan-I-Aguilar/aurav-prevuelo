@@ -6,7 +6,7 @@ const STATIONS=INSPECTION_STATIONS.map(s=>{
  const scale=Math.max(1,2.25/distance);
  return {...s,stand:[s.point[0]+dx*scale,0,s.point[2]+dz*scale]};
 });
-import {COURSE,RING_RADIUS,REFERENCE,newFlight,stepFlight,flightGuidance} from './flight.js';
+import {COURSE,RING_RADIUS,REFERENCE,newFlight,stepFlight,flightGuidance,flightTarget} from './flight.js';
 
 const $=id=>document.getElementById(id), mission=new Mission();
 const scene=new THREE.Scene();
@@ -111,6 +111,14 @@ buildWorld();applyBrand();
 const pitotCover=box(.13,.12,.43,-3.35,1.78,-1.64,material('#c74535'),aircraft);
 const removeTag=label('REMOVE BEFORE FLIGHT',.7,.14,'#fff7e7','#b62d2b');removeTag.position.set(-3.35,1.55,-1.65);aircraft.add(removeTag);
 const controlLock=box(.035,.3,.035,-.2,1.4,-2.1,material('#d34b37'),aircraft);
+// Lo que se retira antes de volar. Las piezas del modelo: banderines REMOVE BEFORE FLIGHT de las
+// amarras de ala (Object_72), de la nariz (Object_76) y de los montantes (Object_78), ganchos (Object_114)
+// y bloques de amarre (Object_116).
+const AMARRAS=['Object_72','Object_76','Object_78','Object_116','Object_114'];
+function elementosDeTierra(puestos){
+ pitotCover.visible=removeTag.visible=controlLock.visible=puestos;
+ for(const name of AMARRAS){const o=model?.getObjectByName(name);if(o)o.visible=puestos;}
+}
 
 // Matrícula a ambos lados del fuselaje. La «N923A» que traía el modelo se borró de
 // Body_baseColor.png; acá se dibuja la propia como cartel transparente pegado a la chapa,
@@ -200,8 +208,7 @@ function salirDelJuego(){
  if(renderer.xr.isPresenting)renderer.xr.getSession()?.end();
  if(mission.phase==='flight'||mission.phase==='complete')returnToApron();
  closeInspection();mission.reset();
- pitotCover.visible=removeTag.visible=controlLock.visible=true;
- for(const name of ['Object_72','Object_76','Object_78','Object_116','Object_114']){const o=model?.getObjectByName(name);if(o)o.visible=true;}
+ elementosDeTierra(true);
  for(const id of ['hud','flight-hud','debrief','reporte','inspection','help-modal'])$(id).classList.add('hidden');
  $('intro').classList.remove('hidden');$('airport-card').classList.remove('hidden');
  document.body.classList.remove('playing');panelMode='mission';panelSummoned=false;
@@ -221,7 +228,7 @@ function answer(index){const r=mission.answer(index);if(!r.ok){$('inspection-fee
  playCue('correct');showToast(r.message);if(r.id==='cabin'&&mission.steps.cabin>=2)controlLock.visible=false;
  if(r.id==='pitot'){pitotCover.visible=false;removeTag.visible=false;}
  if(r.id==='tail')tailAnimation=2;
- if(r.id==='secure'&&mission.steps.secure>=1){for(const name of ['Object_72','Object_76','Object_78','Object_116','Object_114']){const o=model?.getObjectByName(name);if(o)o.visible=false;}}
+ if(r.id==='secure'&&mission.steps.secure>=1){for(const name of AMARRAS){const o=model?.getObjectByName(name);if(o)o.visible=false;}}
  if(r.finished){closeInspection();updateHUD();showToast(r.message);if(mission.ready){panelMode='ready';showToast('12 de 12. Chequeo completo.');if(!renderer.xr.isPresenting)mostrarReporte();}}else{drawInspection();$('inspection-feedback').textContent=r.message;}lastPanelKey='';
 }
 function closeInspection(){mission.active=null;activeStation=null;panelSummoned=false;panelMode=mission.ready?'ready':'mission';$('inspection').classList.add('hidden');inspectionProp.visible=false;lastPanelKey='';positionPanel();}
@@ -344,6 +351,22 @@ $('sound').onclick=toggleSound;
 function showBoarding(){if(!mission.ready){showToast('Completá los doce puntos antes de volar.');return;}closeInspection();panelMode='boarding';positionPanel();
  if(!renderer.xr.isPresenting){$('inspection').classList.remove('hidden');$('inspection-zone').textContent='12 / 12 · CHEQUEO COMPLETO';$('inspection-title').textContent='Tu lugar está en el cielo';$('inspection-copy').textContent='Comienza un circuito arcade: despegá, rodeá el pino de referencia y regresá a aterrizar. No representa procedimientos ni física de vuelo reales.';$('inspection-feedback').textContent='';$('inspection-options').replaceChildren();const b=document.createElement('button');b.className='option';b.textContent='Iniciar vuelo arcade';b.onclick=startFlight;$('inspection-options').append(b);}}
 $('board').onclick=showBoarding;
+// Guía del vuelo. Los anillos solos no dicen por dónde ir: un camino tenue une todo el circuito
+// (pista → anillos → pista) y un láser sale del avión hacia el próximo objetivo.
+const guiaPuntos=[new THREE.Vector3(30,.6,10),...COURSE.map(c=>new THREE.Vector3(c.x,c.y,c.z)),new THREE.Vector3(30,.6,-1000)];
+const guiaCamino=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(guiaPuntos,false,'centripetal'),600,.45,6,false),
+ new THREE.MeshBasicMaterial({color:'#29b6f6',transparent:true,opacity:.35,depthWrite:false,fog:false}));guiaCamino.visible=false;scene.add(guiaCamino);
+const guiaLaser=new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,1,8,1,true),new THREE.MeshBasicMaterial({color:'#ffffff',transparent:true,opacity:.7,depthWrite:false,fog:false}));guiaLaser.visible=false;scene.add(guiaLaser);
+const _ga=new THREE.Vector3(),_gb=new THREE.Vector3(),_up=new THREE.Vector3(0,1,0);
+function actualizarGuia(){
+ const enVuelo=mission.phase==='flight'&&flight.stage!=='rollout'&&flight.stage!=='complete';
+ guiaCamino.visible=mission.phase==='flight';guiaLaser.visible=enVuelo;if(!enVuelo)return;
+ // Sale 12 m por delante de la nariz y algo más abajo de la vista, para no cruzar los ojos del piloto.
+ _ga.set(flight.x-Math.sin(flight.heading)*12,flight.altitude+.4,flight.z-Math.cos(flight.heading)*12);
+ const t=flightTarget(flight);_gb.set(t.x,t.y,t.z);
+ const d=_gb.clone().sub(_ga),L=d.length();if(L<1){guiaLaser.visible=false;return;}
+ guiaLaser.position.copy(_ga).addScaledVector(d,.5);guiaLaser.quaternion.setFromUnitVectors(_up,d.normalize());guiaLaser.scale.set(1,L,1);
+}
 const flightRings=[];
 for(const p of COURSE){const mesh=new THREE.Mesh(new THREE.TorusGeometry(RING_RADIUS,.35,8,56),new THREE.MeshBasicMaterial({color:'#29b6f6'}));mesh.position.set(p.x,p.y,p.z);mesh.visible=false;scene.add(mesh);flightRings.push(mesh);}
 flightRings.forEach((ring,i)=>{const prev=i?COURSE[i-1]:{x:30,z:45};ring.rotation.y=Math.atan2(COURSE[i].x-prev.x,COURSE[i].z-prev.z);});
@@ -358,21 +381,22 @@ function startFlight(){
  // desde el recorrido, solo con los doce puntos aprobados.
  const autorizado=(mission.phase==='intro'||mission.esDemo)?mission.demo():mission.takeoff();
  if(!autorizado){showToast('El vuelo sigue bloqueado: faltan inspecciones.');return;}
- closeInspection();flight=newFlight();flightRig.position.set(30,0,45);flightRig.rotation.set(0,0,0);flightRig.add(aircraft);flightRig.add(rig);placeRig(-.26,-1.73,[0,1.65,-20],1.65); if(!renderer.xr.isPresenting){yaw=0;pitch=0;camera.rotation.set(0,0,0);}
+ elementosDeTierra(false); // nunca se vuela con funda, traba ni amarras, venga del chequeo o de la demo
+ closeInspection();flight=newFlight();guiaCamino.visible=true;flightRig.position.set(30,0,45);flightRig.rotation.set(0,0,0);flightRig.add(aircraft);flightRig.add(rig);placeRig(-.26,-1.73,[0,1.65,-20],1.65); if(!renderer.xr.isPresenting){yaw=0;pitch=0;camera.rotation.set(0,0,0);}
  markers.forEach(m=>{m.group.visible=false;m.floor.visible=false;});flightRings.forEach((r,i)=>{r.visible=true;r.material.color.set(i===0?'#ffffff':'#4b7fa0');});$('hud').classList.add('hidden');$('flight-hud').classList.remove('hidden');document.body.dataset.phase='flight';panelMode='flight';panel.visible=false;sun.castShadow=false;lastPanelKey='';initAudio();showToast(mission.esDemo?'Vuelo de muestra: seguí los anillos, rodeá el pino y volvé a aterrizar. W/S: altura · A/D: virar. Con ✕ volvés a la portada.':'Circuito arcade: seguí los anillos, rodeá el pino y volvé a aterrizar. W/S: altura · A/D: virar.');
 }
 function togglePause(){if(mission.phase!=='flight')return;flight.paused=!flight.paused;$('pause-flight').textContent=flight.paused?'Continuar':'Pausar';if(flight.paused)positionPanel();lastPanelKey='';}
 function restartFlight(){if(mission.phase!=='flight')return;returnToApron();lastInstrumentTime=0;startFlight();$('pause-flight').textContent='Pausar';}
 $('pause-flight').onclick=togglePause;$('return-flight').textContent='Reiniciar vuelo';$('return-flight').onclick=restartFlight;
-function returnToApron(){mission.returnToApron();scene.add(aircraft);scene.add(rig);flightRig.position.set(0,0,0);flightRig.rotation.set(0,0,0);aircraft.position.set(0,0,0);aircraft.rotation.set(0,0,0);flightRings.forEach(r=>r.visible=false);markers.forEach(m=>{m.group.visible=true;m.floor.visible=true;});sun.castShadow=true;$('flight-hud').classList.add('hidden');$('debrief').classList.add('hidden');$('hud').classList.remove('hidden');placeRig(-7,-6,[0,1.4,0]);panelMode=mission.ready?'ready':'mission';positionPanel();updateHUD();}
-function resetGame(){if(mission.esDemo){salirDelJuego();return;}returnToApron();$('reporte').classList.add('hidden');mission.reset();mission.start();pitotCover.visible=removeTag.visible=controlLock.visible=true;for(const name of ['Object_72','Object_76','Object_78','Object_116','Object_114']){const o=model?.getObjectByName(name);if(o)o.visible=true;}panelMode='mission';$('pause-flight').textContent='Pausar';updateHUD();showToast('Nueva misión. Empezá por la cabina.');}
+function returnToApron(){mission.returnToApron();guiaCamino.visible=guiaLaser.visible=false;scene.add(aircraft);scene.add(rig);flightRig.position.set(0,0,0);flightRig.rotation.set(0,0,0);aircraft.position.set(0,0,0);aircraft.rotation.set(0,0,0);flightRings.forEach(r=>r.visible=false);markers.forEach(m=>{m.group.visible=true;m.floor.visible=true;});sun.castShadow=true;$('flight-hud').classList.add('hidden');$('debrief').classList.add('hidden');$('hud').classList.remove('hidden');placeRig(-7,-6,[0,1.4,0]);panelMode=mission.ready?'ready':'mission';positionPanel();updateHUD();}
+function resetGame(){if(mission.esDemo){salirDelJuego();return;}returnToApron();$('reporte').classList.add('hidden');mission.reset();mission.start();elementosDeTierra(true);panelMode='mission';$('pause-flight').textContent='Pausar';updateHUD();showToast('Nueva misión. Empezá por la cabina.');}
 $('replay').onclick=resetGame;
 const verReporte=document.createElement('button');verReporte.className='secondary';verReporte.textContent='Ver el resultado del chequeo';verReporte.onclick=mostrarReporte;$('replay').after(verReporte);
 const resetChecklistButton=document.createElement('button');resetChecklistButton.textContent='Reiniciar lista de chequeos';resetChecklistButton.onclick=resetGame;$('return-flight').after(resetChecklistButton);
-function finishFlight(){mission.finish();document.body.dataset.phase='complete';$('flight-hud').classList.add('hidden');$('debrief').classList.remove('hidden');$('debrief-copy').textContent=mission.esDemo?'Vuelo de muestra: despegue, circuito y aterrizaje. En el juego completo, el cielo se habilita recién después de aprobar los doce puntos del chequeo.':`Chequeo: nota ${mission.nota}/100, ${mission.limpios} de 12 puntos sin errores, ${Mission.reloj(mission.duracion)}. Después, el circuito completo y el aterrizaje con frenado.`;positionPanel();tone(880,.45);}
+function finishFlight(){mission.finish();guiaLaser.visible=false;document.body.dataset.phase='complete';$('flight-hud').classList.add('hidden');$('debrief').classList.remove('hidden');$('debrief-copy').textContent=mission.esDemo?'Vuelo de muestra: despegue, circuito y aterrizaje. En el juego completo, el cielo se habilita recién después de aprobar los doce puntos del chequeo.':`Chequeo: nota ${mission.nota}/100, ${mission.limpios} de 12 puntos sin errores, ${Mission.reloj(mission.duracion)}. Después, el circuito completo y el aterrizaje con frenado.`;positionPanel();tone(880,.45);}
 function updateFlight(dt){if(flight.paused||mission.phase!=='flight')return;let climb=(keys.has('KeyW')?1:0)-(keys.has('KeyS')?1:0),turn=(keys.has('KeyD')?1:0)-(keys.has('KeyA')?1:0);
  const session=renderer.xr.getSession();if(session)for(const source of session.inputSources){const g=source.gamepad;if(!g)continue;const axes=g.axes;if(source.handedness==='left')climb=-(axes[3]??axes[1]??0);if(source.handedness==='right')turn=axes[2]??axes[0]??0;}
- const previousRing=flight.rings,event=stepFlight(flight,dt,climb,turn);flightRig.rotation.y=flight.heading;flightRig.position.set(flight.x,flight.altitude,flight.z);
+ const previousRing=flight.rings,event=stepFlight(flight,dt,climb,turn);flightRig.rotation.y=flight.heading;flightRig.position.set(flight.x,flight.altitude,flight.z);actualizarGuia();
  if(event==='ring'){flightRings[previousRing].visible=false;if(flightRings[flight.rings])flightRings[flight.rings].material.color.set('#ffffff');tone(760,.16);showToast(flightGuidance(flight));}
  if(event==='touchdown'){showToast('En pista. Frenado automático: mantené la calma hasta detenerte.');tone(520,.2);}
  if(event==='complete'){finishFlight();return;}
